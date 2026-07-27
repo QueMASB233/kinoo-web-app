@@ -8,6 +8,10 @@ export const rootMetadata: Metadata = {
     template: `%s | ${SITE_NAME}`,
   },
   description: "Plataforma web de KYNOO para proveedores y administración.",
+  applicationName: SITE_NAME,
+  appleWebApp: {
+    title: SITE_NAME,
+  },
 }
 
 export const providerPanelMetadata: Metadata = {
