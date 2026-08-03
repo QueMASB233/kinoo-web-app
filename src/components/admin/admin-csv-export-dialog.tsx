@@ -214,7 +214,7 @@ export function AdminCsvExportDialog({
     setDateTo("")
 
     adminApi.providers
-      .list({ limit: 500 })
+      .list({ page: 1, limit: 500 })
       .then((data) => {
         if (cancelled) return
         setAllProviders(data.items)

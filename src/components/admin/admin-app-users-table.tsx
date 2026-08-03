@@ -1,9 +1,18 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { Check, Copy, Loader2, Pencil, Search } from "lucide-react"
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Loader2,
+  Pencil,
+  RotateCcw,
+  Search,
+} from "lucide-react"
 import {
   ADMIN_FILTER_INPUT_CLASS,
   ADMIN_FILTER_LABEL_CLASS,
@@ -44,6 +53,19 @@ type RoleTab = "all" | AppUserRoleCode
 interface AdminAppUsersTableProps {
   users: AdminAppUserListItem[]
   onUsersChange: (users: AdminAppUserListItem[]) => void
+  isLoading: boolean
+  roleTab: RoleTab
+  onRoleTabChange: (tab: RoleTab) => void
+  searchInput: string
+  onSearchInputChange: (value: string) => void
+  onSearch: () => void
+  onReset: () => void
+  hasActiveFilters: boolean
+  page: number
+  total: number
+  totalPages: number
+  pageSize: number
+  onPageChange: (page: number) => void
 }
 
 const ROLE_LABELS: Record<AppUserRoleCode, string> = {
@@ -115,10 +137,21 @@ function formatDate(value: string | null): string {
 export function AdminAppUsersTable({
   users,
   onUsersChange,
+  isLoading,
+  roleTab,
+  onRoleTabChange,
+  searchInput,
+  onSearchInputChange,
+  onSearch,
+  onReset,
+  hasActiveFilters,
+  page,
+  total,
+  totalPages,
+  pageSize,
+  onPageChange,
 }: AdminAppUsersTableProps) {
   const { toast } = useToast()
-  const [search, setSearch] = useState("")
-  const [tab, setTab] = useState<RoleTab>("all")
   const [editTarget, setEditTarget] = useState<AdminAppUserListItem | null>(null)
   const [formStatus, setFormStatus] = useState<AppUserStatusCode>("active")
   const [saving, setSaving] = useState(false)
@@ -158,33 +191,14 @@ export function AdminAppUsersTable({
     }
   }
 
-  const filtered = useMemo(() => {
-    let result = users
-
-    if (tab === "owner") {
-      result = result.filter((u) => u.role_code === "owner")
-    } else if (tab === "member") {
-      result = result.filter((u) => u.role_code === "member")
-    }
-
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      result = result.filter(
-        (u) =>
-          u.full_name.toLowerCase().includes(q) ||
-          u.email.toLowerCase().includes(q) ||
-          u.id.toLowerCase().includes(q),
-      )
-    }
-
-    return result
-  }, [users, tab, search])
-
   return (
     <div className="space-y-4">
       <div className={ADMIN_FILTER_PANEL_CLASS}>
         <div className="space-y-3">
-          <Tabs value={tab} onValueChange={(v) => setTab(v as RoleTab)}>
+          <Tabs
+            value={roleTab}
+            onValueChange={(v) => onRoleTabChange(v as RoleTab)}
+          >
             <TabsList>
               <TabsTrigger value="all">Todos</TabsTrigger>
               <TabsTrigger value="owner">Owners</TabsTrigger>
@@ -199,22 +213,50 @@ export function AdminAppUsersTable({
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => onSearchInputChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      onSearch()
+                    }
+                  }}
                   placeholder="Nombre, correo o ID…"
                   className={cn(ADMIN_FILTER_INPUT_CLASS, "pl-9 pr-3")}
                 />
               </div>
             </div>
+            <Button
+              type="button"
+              onClick={onSearch}
+              className="h-9 gap-2"
+            >
+              <Search className="h-3.5 w-3.5" />
+              Buscar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onReset}
+              className="h-9 gap-2"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Limpiar
+            </Button>
           </div>
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16 text-gray-500">
+          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+          Cargando usuarios…
+        </div>
+      ) : users.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-200 py-12 text-center text-sm text-gray-500">
-          {users.length === 0
-            ? "Aún no hay usuarios registrados en la app."
-            : "No hay usuarios que coincidan con los filtros."}
+          {hasActiveFilters
+            ? "No hay usuarios que coincidan con los filtros."
+            : "Aún no hay usuarios registrados en la app."}
         </div>
       ) : (
         <div className="rounded-lg border border-gray-200 overflow-hidden bg-white">
@@ -240,7 +282,7 @@ export function AdminAppUsersTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((item) => (
+              {users.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
                     <div className="flex items-center gap-1 min-w-0 max-w-[132px]">
@@ -316,6 +358,31 @@ export function AdminAppUsersTable({
               ))}
             </TableBody>
           </Table>
+
+          <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
+            <p className="text-xs text-gray-500">
+              {total} usuario{total !== 1 ? "s" : ""} · Página {page} de{" "}
+              {totalPages} · {pageSize} por página
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onPageChange(Math.max(1, page - 1))}
+                disabled={page <= 1 || isLoading}
+                className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+                disabled={page >= totalPages || isLoading}
+                className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

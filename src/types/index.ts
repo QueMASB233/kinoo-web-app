@@ -752,6 +752,8 @@ export interface AdminProviderListItem extends AdminProviderOption {
 export interface AdminProviderList {
   items: AdminProviderListItem[]
   total: number
+  page: number
+  limit: number
 }
 
 export interface AdminCreateProviderRequest {
@@ -808,6 +810,8 @@ export interface AdminAppUserListItem {
 export interface AdminAppUserList {
   items: AdminAppUserListItem[]
   total: number
+  page: number
+  limit: number
 }
 
 export type AppUserStatusCode = "active" | "blocked" | "suspended"

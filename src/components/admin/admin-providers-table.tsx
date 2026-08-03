@@ -1,9 +1,19 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { Check, Copy, Loader2, Pencil, Plus, Search } from "lucide-react"
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Loader2,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Search,
+} from "lucide-react"
 import { adminApi } from "@/lib/admin-api"
 import { ApiError } from "@/lib/api-client"
 import {
@@ -41,6 +51,18 @@ import type {
 interface AdminProvidersTableProps {
   providers: AdminProviderListItem[]
   onProvidersChange: (providers: AdminProviderListItem[]) => void
+  onReload: () => void
+  isLoading: boolean
+  searchInput: string
+  onSearchInputChange: (value: string) => void
+  onSearch: () => void
+  onReset: () => void
+  hasActiveFilters: boolean
+  page: number
+  total: number
+  totalPages: number
+  pageSize: number
+  onPageChange: (page: number) => void
 }
 
 const STATUS_LABELS: Record<ProviderStatusCode, string> = {
@@ -128,9 +150,20 @@ function toListItem(updated: {
 export function AdminProvidersTable({
   providers,
   onProvidersChange,
+  onReload,
+  isLoading,
+  searchInput,
+  onSearchInputChange,
+  onSearch,
+  onReset,
+  hasActiveFilters,
+  page,
+  total,
+  totalPages,
+  pageSize,
+  onPageChange,
 }: AdminProvidersTableProps) {
   const { toast } = useToast()
-  const [search, setSearch] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<AdminProviderListItem | null>(
     null,
@@ -141,17 +174,6 @@ export function AdminProvidersTable({
   const [formEmail, setFormEmail] = useState("")
   const [formCredits, setFormCredits] = useState("")
   const [formStatus, setFormStatus] = useState<ProviderStatusCode>("active")
-
-  const filtered = useMemo(() => {
-    if (!search.trim()) return providers
-    const q = search.toLowerCase()
-    return providers.filter(
-      (p) =>
-        p.full_name.toLowerCase().includes(q) ||
-        p.email.toLowerCase().includes(q) ||
-        p.id.toLowerCase().includes(q),
-    )
-  }, [providers, search])
 
   function resetCreateForm() {
     setFormName("")
@@ -204,17 +226,6 @@ export function AdminProvidersTable({
     setSaving(true)
     try {
       const created = await adminApi.providers.create(payload)
-      const listItem: AdminProviderListItem = {
-        id: created.id,
-        full_name: created.full_name,
-        email: created.email,
-        status_code: created.status_code,
-        email_verified: created.email_verified,
-        account_activated: created.account_activated,
-        balance_credits: created.initial_credits,
-        created_at: new Date().toISOString(),
-      }
-      onProvidersChange([listItem, ...providers])
 
       const emailNote = created.welcome_email_sent
         ? "Se envió el correo de bienvenida."
@@ -226,6 +237,7 @@ export function AdminProvidersTable({
       })
       setCreateOpen(false)
       resetCreateForm()
+      onReload()
     } catch (err) {
       toast({
         variant: "destructive",
@@ -291,13 +303,33 @@ export function AdminProvidersTable({
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => onSearchInputChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    onSearch()
+                  }
+                }}
                 placeholder="Nombre, correo o ID…"
                 className={cn(ADMIN_FILTER_INPUT_CLASS, "pl-9 pr-3")}
               />
             </div>
           </div>
+
+          <Button type="button" onClick={onSearch} className="h-9 gap-2">
+            <Search className="h-3.5 w-3.5" />
+            Buscar
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onReset}
+            className="h-9 gap-2"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Limpiar
+          </Button>
 
           <Button type="button" onClick={openCreate} className="h-9 gap-2">
             <Plus className="h-4 w-4" />
@@ -306,11 +338,16 @@ export function AdminProvidersTable({
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16 text-gray-500">
+          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+          Cargando proveedores…
+        </div>
+      ) : providers.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-200 py-12 text-center text-sm text-gray-500">
-          {providers.length === 0
-            ? "Aún no hay proveedores. Crea uno para empezar."
-            : "No hay proveedores que coincidan con la búsqueda."}
+          {hasActiveFilters
+            ? "No hay proveedores que coincidan con la búsqueda."
+            : "Aún no hay proveedores. Crea uno para empezar."}
         </div>
       ) : (
         <div className="rounded-lg border border-gray-200 overflow-hidden bg-white">
@@ -332,7 +369,7 @@ export function AdminProvidersTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((item) => (
+              {providers.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
                     <div className="flex items-center gap-1 min-w-0 max-w-[140px]">
@@ -407,6 +444,31 @@ export function AdminProvidersTable({
               ))}
             </TableBody>
           </Table>
+
+          <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
+            <p className="text-xs text-gray-500">
+              {total} proveedor{total !== 1 ? "es" : ""} · Página {page} de{" "}
+              {totalPages} · {pageSize} por página
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onPageChange(Math.max(1, page - 1))}
+                disabled={page <= 1 || isLoading}
+                className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+                disabled={page >= totalPages || isLoading}
+                className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

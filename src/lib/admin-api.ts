@@ -48,7 +48,11 @@ function buildQuery(params: Record<string, unknown>): string {
 
 export const adminApi = {
   providers: {
-    list: (params?: { search?: string; limit?: number }) =>
+    list: (params?: {
+      search?: string
+      page?: number
+      limit?: number
+    }) =>
       apiClient<AdminProviderList>(`/admin/providers${buildQuery(params || {})}`),
 
     create: (data: AdminCreateProviderRequest) =>
@@ -65,7 +69,12 @@ export const adminApi = {
   },
 
   appUsers: {
-    list: (params?: { role?: string; search?: string; limit?: number }) =>
+    list: (params?: {
+      role?: string
+      search?: string
+      page?: number
+      limit?: number
+    }) =>
       apiClient<AdminAppUserList>(`/admin/app-users${buildQuery(params || {})}`),
 
     update: (id: string, data: AdminUpdateAppUserRequest) =>
