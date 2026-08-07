@@ -7,6 +7,7 @@ import { adminApi } from "@/lib/admin-api"
 import { ApiError } from "@/lib/api-client"
 import { BENEFIT_TYPE_LABELS, PROMOTION_TYPE_LABELS } from "@/lib/constants"
 import { useAdminBadges } from "@/providers/admin-provider"
+import { AdminReviewLocationsMap } from "@/components/admin/admin-review-locations-map"
 import {
   CheckCircle,
   XCircle,
@@ -15,8 +16,9 @@ import {
   ImageIcon,
   Search,
   RotateCcw,
+  MapPin,
 } from "lucide-react"
-import type { Promotion } from "@/types"
+import type { Promotion, PromotionLocation } from "@/types"
 
 export default function ReviewPage() {
   const [promotions, setPromotions] = useState<Promotion[]>([])
@@ -56,7 +58,6 @@ export default function ReviewPage() {
         )}
       </div>
 
-      {/* Search */}
       <div className="rounded-lg border border-[#e5e7eb] bg-white p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
@@ -121,8 +122,6 @@ export default function ReviewPage() {
   )
 }
 
-// ─── Review Card ─────────────────────────────────────────
-
 function ReviewCard({
   promo,
   onRemove,
@@ -137,6 +136,11 @@ function ReviewCard({
   const [showRejectField, setShowRejectField] = useState(false)
   const [reason, setReason] = useState("")
   const [cardError, setCardError] = useState<string | null>(null)
+  const [mapOpen, setMapOpen] = useState(false)
+
+  const locations: PromotionLocation[] = promo.locations ?? []
+  const locationCount = locations.length
+  const hasLocations = locationCount > 0
 
   async function handleApprove() {
     setProcessing("approve")
@@ -179,10 +183,8 @@ function ReviewCard({
   return (
     <div className="rounded-lg border border-[#e5e7eb] bg-white">
       <div className="flex flex-col lg:flex-row">
-        {/* Left — Info */}
         <div className="flex-1 p-5 space-y-3">
           <div className="flex items-start gap-4">
-            {/* Thumbnail */}
             {promo.image_url ? (
               <img
                 src={promo.image_url}
@@ -224,7 +226,6 @@ function ReviewCard({
             </div>
           </div>
 
-          {/* Details grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-xs">
             <Detail label="Proveedor" value={promo.provider_id?.slice(0, 8) || "—"} />
             {promo.business_name && (
@@ -260,6 +261,50 @@ function ReviewCard({
             <Detail label="Creada" value={fmt(promo.created_at)} />
           </div>
 
+          <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-gray-600">
+                  {hasLocations
+                    ? `${locationCount} ubicación${locationCount !== 1 ? "es" : ""}`
+                    : "Ubicaciones"}
+                </p>
+                {!hasLocations ? (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Sin ubicaciones — no se mostrará en la app aunque apruebes
+                  </p>
+                ) : (
+                  <ul className="mt-1.5 space-y-1">
+                    {locations.map((loc) => (
+                      <li
+                        key={loc.id}
+                        className="flex items-center gap-1.5 text-xs text-gray-700"
+                      >
+                        <MapPin className="h-3 w-3 shrink-0 text-gray-400" />
+                        <span className="truncate">
+                          {loc.place.address ||
+                            loc.place.city ||
+                            "Sin dirección"}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-gray-400">
+                          {loc.coverage_type === "city" ? "25 km" : "1 km"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setMapOpen(true)}
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                <MapPin className="h-3.5 w-3.5" />
+                Ver en mapa
+              </button>
+            </div>
+          </div>
+
           {promo.link && (
             <a
               href={promo.link}
@@ -285,12 +330,11 @@ function ReviewCard({
             )}
         </div>
 
-        {/* Right — Actions */}
-        <div className="flex flex-col gap-2 border-t lg:border-l lg:border-t-0 border-gray-200 p-5 lg:w-[220px] shrink-0">
+        <div className="flex shrink-0 flex-col gap-2 border-t border-gray-200 p-5 lg:w-[220px] lg:border-l lg:border-t-0">
           <button
             onClick={handleApprove}
             disabled={processing !== null}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            className="flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
           >
             {processing === "approve" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -300,11 +344,17 @@ function ReviewCard({
             Aprobar
           </button>
 
+          {!hasLocations && (
+            <p className="text-[11px] leading-snug text-amber-700">
+              Sin ubicaciones: aunque apruebes, no aparecerá en la app.
+            </p>
+          )}
+
           {!showRejectField ? (
             <button
               onClick={() => setShowRejectField(true)}
               disabled={processing !== null}
-              className="flex h-10 items-center justify-center gap-2 rounded-lg border border-red-300 px-4 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+              className="flex h-10 items-center justify-center gap-2 rounded-lg border border-red-300 px-4 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
             >
               <XCircle className="h-4 w-4" />
               Rechazar
@@ -321,7 +371,7 @@ function ReviewCard({
               <button
                 onClick={handleReject}
                 disabled={processing !== null}
-                className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-red-600 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-red-600 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
               >
                 {processing === "reject" ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -349,6 +399,13 @@ function ReviewCard({
           <p className="text-xs text-red-600">{cardError}</p>
         </div>
       )}
+
+      <AdminReviewLocationsMap
+        open={mapOpen}
+        onOpenChange={setMapOpen}
+        title={promo.title}
+        locations={locations}
+      />
     </div>
   )
 }

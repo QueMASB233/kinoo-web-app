@@ -26,6 +26,10 @@ import type {
   AdCreditLocationPricing,
 } from "@/types"
 import { ROUTES } from "@/lib/constants"
+import {
+  CITY_COVERAGE_RADIUS_M,
+  POINT_COVERAGE_RADIUS_M,
+} from "@/lib/geo-coverage"
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -53,9 +57,9 @@ function showDefaultCountryView(map: google.maps.Map) {
 }
 
 const POINT_COLOR = "#FF6B35"
-const POINT_RADIUS = 1000
+const POINT_RADIUS = POINT_COVERAGE_RADIUS_M
 const CITY_COLOR = "#4A90D9"
-const CITY_RADIUS = 10000
+const CITY_RADIUS = CITY_COVERAGE_RADIUS_M
 
 const PREVIEW_POINT_COLOR = "#8B5CF6"
 const PREVIEW_CITY_COLOR = "#7C3AED"
@@ -561,9 +565,9 @@ export function LocationPicker({ promotionId, promotionType }: LocationPickerPro
                 : "border-border hover:border-muted-foreground/30"
             }`}
           >
-            <p className="text-sm font-medium">Toda la ciudad</p>
+            <p className="text-sm font-medium">Toda la ciudad (25 km)</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Ciudad completa
+              Radio de 25 km
               {chargesCredits && pricing != null && (
                 <> · {Number(pricing.city_credits)} créditos</>
               )}
@@ -686,7 +690,9 @@ export function LocationPicker({ promotionId, promotionType }: LocationPickerPro
               <p className="text-xs text-muted-foreground mt-1">
                 Cobertura:{" "}
                 <span className="font-medium text-foreground">
-                  {coverageType === "city" ? "Toda la ciudad" : "Punto exacto (1 km)"}
+                  {coverageType === "city"
+                    ? "Toda la ciudad (25 km)"
+                    : "Punto exacto (1 km)"}
                 </span>
               </p>
             </div>
@@ -757,7 +763,7 @@ export function LocationPicker({ promotionId, promotionType }: LocationPickerPro
                             : "bg-[#FF6B35]/15 text-[#FF6B35]"
                         }`}
                       >
-                        {isCity ? "Ciudad completa" : "Punto exacto"}
+                        {isCity ? "Ciudad (25 km)" : "Punto (1 km)"}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground truncate">

@@ -96,6 +96,8 @@ export interface Promotion {
   created_at: string
   updated_at: string
   redemptions_count: number
+  /** Presente en revisión pendiente (admin). */
+  locations?: PromotionLocation[] | null
 }
 
 export interface CreatePromotionRequest {
