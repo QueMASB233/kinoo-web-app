@@ -264,7 +264,9 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
       points_required: 0,
       points_cost: 0,
       is_referral_only: values.is_referral_only,
-      min_referral_points_required: values.min_referral_points_required,
+      min_referral_points_required: values.is_referral_only
+        ? values.min_referral_points_required
+        : 0,
       is_single_use_per_user: values.is_single_use_per_user,
       stock_total: values.has_limited_stock ? (values.stock_total ?? null) : null,
       start_date: values.start_date.toISOString(),
@@ -565,7 +567,12 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
             </div>
             <Switch
               checked={watchIsReferralOnly}
-              onCheckedChange={(v) => form.setValue("is_referral_only", v)}
+              onCheckedChange={(v) => {
+                form.setValue("is_referral_only", v)
+                if (!v) {
+                  form.setValue("min_referral_points_required", 0)
+                }
+              }}
             />
           </div>
 
