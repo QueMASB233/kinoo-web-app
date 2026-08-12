@@ -12,7 +12,6 @@ import {
   Loader2,
   RotateCcw,
   Search,
-  Undo2,
   XCircle,
 } from "lucide-react"
 import { AdminCsvExportDialog } from "@/components/admin/admin-csv-export-dialog"
@@ -34,7 +33,6 @@ import type {
   AdminPromotionOrderFulfillmentList,
 } from "@/types"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -70,18 +68,6 @@ const STATUS_FILTER_OPTIONS = [
   { value: "rejected", label: "Rechazadas" },
 ]
 
-type RefundTarget = {
-  orderId: string
-  amountUsd: string | number
-  buyerName: string
-  buyerEmail: string
-  promotionTitle: string
-  nuveiTxId?: string | null
-  fulfillmentStatus?: string | null
-  orderStatus: string
-  requiresForce: boolean
-}
-
 function statusStyle(status: string) {
   return STATUS_STYLES[status] || "bg-gray-100 text-gray-600"
 }
@@ -96,22 +82,6 @@ function orderStatusStyle(status: string) {
 
 function orderStatusLabel(status: string) {
   return PROMOTION_PAID_ORDER_STATUS_LABELS[status] || status
-}
-
-function refundTargetFromFulfillment(
-  item: AdminPromotionOrderFulfillment,
-): RefundTarget {
-  return {
-    orderId: item.order_id,
-    amountUsd: item.amount_usd,
-    buyerName: item.buyer_full_name,
-    buyerEmail: item.buyer_email,
-    promotionTitle: item.promotion_title_snapshot,
-    nuveiTxId: item.nuvei_transaction_id,
-    fulfillmentStatus: item.status,
-    orderStatus: item.order_status,
-    requiresForce: item.status === "verified",
-  }
 }
 
 export default function AdminPromotionFulfillmentsPage() {
@@ -141,12 +111,6 @@ export default function AdminPromotionFulfillmentsPage() {
   const [mainTab, setMainTab] = useState<"orders" | "fulfillments">(
     "fulfillments",
   )
-
-  const [refundTarget, setRefundTarget] = useState<RefundTarget | null>(null)
-  const [refundReason, setRefundReason] = useState("")
-  const [refundForce, setRefundForce] = useState(false)
-  const [refundLoading, setRefundLoading] = useState(false)
-  const [refundError, setRefundError] = useState<string | null>(null)
 
   const fetchFulfillments = useCallback(async () => {
     setIsLoading(true)
@@ -212,59 +176,6 @@ export default function AdminPromotionFulfillmentsPage() {
     setReviewDetail(null)
     setReviewError(null)
     setAdminNotes("")
-  }
-
-  function openRefund(target: RefundTarget) {
-    setRefundTarget(target)
-    setRefundReason("")
-    setRefundForce(false)
-    setRefundError(null)
-  }
-
-  function closeRefund() {
-    if (refundLoading) return
-    setRefundTarget(null)
-    setRefundReason("")
-    setRefundForce(false)
-    setRefundError(null)
-  }
-
-  async function confirmRefund() {
-    if (!refundTarget) return
-    const reason = refundReason.trim()
-    if (!reason) {
-      setRefundError("El motivo del reembolso es obligatorio.")
-      return
-    }
-    if (refundTarget.requiresForce && !refundForce) {
-      setRefundError(
-        "Esta entrega ya fue verificada. Marca “Forzar reembolso” para continuar.",
-      )
-      return
-    }
-
-    setRefundLoading(true)
-    setRefundError(null)
-    try {
-      const res = await adminApi.promotionOrders.refund(refundTarget.orderId, {
-        reason,
-        force: refundTarget.requiresForce ? refundForce : false,
-      })
-      closeRefund()
-      closeReview()
-      setSuccessMessage(res.message || "Reembolso procesado correctamente")
-      await fetchFulfillments()
-    } catch (e) {
-      setRefundError(
-        e instanceof ApiError
-          ? e.message
-          : e instanceof Error
-            ? e.message
-            : "No se pudo procesar el reembolso",
-      )
-    } finally {
-      setRefundLoading(false)
-    }
   }
 
   async function submitReview(decision: "verified" | "rejected") {
@@ -539,19 +450,6 @@ export default function AdminPromotionFulfillmentsPage() {
                           <Eye className="h-3.5 w-3.5 mr-1" />
                           {item.status === "submitted" ? "Revisar" : "Ver"}
                         </Button>
-                        {item.order_status === "paid" && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-purple-700 border-purple-200 hover:bg-purple-50"
-                            onClick={() =>
-                              openRefund(refundTargetFromFulfillment(item))
-                            }
-                          >
-                            <Undo2 className="h-3.5 w-3.5 mr-1" />
-                            Reembolsar
-                          </Button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -601,19 +499,6 @@ export default function AdminPromotionFulfillmentsPage() {
                     <Eye className="h-3.5 w-3.5 mr-1" />
                     {item.status === "submitted" ? "Revisar" : "Ver detalle"}
                   </Button>
-                  {item.order_status === "paid" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-purple-700 border-purple-200"
-                      onClick={() =>
-                        openRefund(refundTargetFromFulfillment(item))
-                      }
-                    >
-                      <Undo2 className="h-3.5 w-3.5 mr-1" />
-                      Reembolsar
-                    </Button>
-                  )}
                 </div>
               </div>
             ))}
@@ -798,178 +683,53 @@ export default function AdminPromotionFulfillmentsPage() {
             </p>
           )}
           {detail && !detailLoading && (
-            <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-between">
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                {detail.order_status === "paid" && (
+            <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-end">
+              {detail.status === "submitted" &&
+              detail.order_status === "paid" ? (
+                <>
                   <Button
                     variant="outline"
-                    className="text-purple-700 border-purple-200"
                     disabled={reviewLoading}
-                    onClick={() => {
-                      openRefund(refundTargetFromFulfillment(detail))
-                    }}
+                    onClick={closeReview}
                   >
-                    <Undo2 className="h-4 w-4 mr-1" />
-                    Reembolsar
+                    Cancelar
                   </Button>
-                )}
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:ml-auto">
-                {detail.status === "submitted" &&
-                detail.order_status === "paid" ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      disabled={reviewLoading}
-                      onClick={closeReview}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      disabled={reviewLoading}
-                      onClick={() => submitReview("rejected")}
-                    >
-                      {reviewLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <XCircle className="h-4 w-4 mr-1" />
-                          Rechazar
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      disabled={reviewLoading}
-                      className="bg-emerald-600 hover:bg-emerald-700"
-                      onClick={() => submitReview("verified")}
-                    >
-                      {reviewLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <CheckCircle2 className="h-4 w-4 mr-1" />
-                          Aprobar
-                        </>
-                      )}
-                    </Button>
-                  </>
-                ) : (
-                  <Button variant="outline" onClick={closeReview}>
-                    Cerrar
+                  <Button
+                    variant="destructive"
+                    disabled={reviewLoading}
+                    onClick={() => submitReview("rejected")}
+                  >
+                    {reviewLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <XCircle className="h-4 w-4 mr-1" />
+                        Rechazar
+                      </>
+                    )}
                   </Button>
-                )}
-              </div>
+                  <Button
+                    disabled={reviewLoading}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => submitReview("verified")}
+                  >
+                    {reviewLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 mr-1" />
+                        Aprobar
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" onClick={closeReview}>
+                  Cerrar
+                </Button>
+              )}
             </DialogFooter>
           )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!refundTarget}
-        onOpenChange={(open) => !open && closeRefund()}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Reembolsar reserva</DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-3 text-sm text-muted-foreground pt-1">
-                {refundTarget ? (
-                  <>
-                    <p>
-                      Se devolverá{" "}
-                      <strong className="text-foreground">
-                        ${Number(refundTarget.amountUsd).toFixed(2)} USD
-                      </strong>{" "}
-                      a <strong className="text-foreground">{refundTarget.buyerName}</strong>{" "}
-                      ({refundTarget.buyerEmail}) por{" "}
-                      <strong className="text-foreground">
-                        {refundTarget.promotionTitle}
-                      </strong>
-                      .
-                    </p>
-                    {refundTarget.nuveiTxId && (
-                      <p className="text-xs font-mono bg-gray-50 rounded px-2 py-1.5">
-                        TX: {refundTarget.nuveiTxId}
-                      </p>
-                    )}
-                    {refundTarget.fulfillmentStatus && (
-                      <p className="text-xs">
-                        Fase entrega:{" "}
-                        <strong>{statusLabel(refundTarget.fulfillmentStatus)}</strong>
-                      </p>
-                    )}
-                    {!refundTarget.fulfillmentStatus && (
-                      <p className="text-xs text-amber-700">
-                        Esta reserva aún no tiene fila de entrega (pendiente de
-                        contactar).
-                      </p>
-                    )}
-                    <div className="space-y-1.5">
-                      <label
-                        htmlFor="refund-reason"
-                        className="text-xs font-medium text-gray-700 block"
-                      >
-                        Motivo del reembolso (obligatorio)
-                      </label>
-                      <Textarea
-                        id="refund-reason"
-                        value={refundReason}
-                        onChange={(e) => setRefundReason(e.target.value)}
-                        placeholder="Ej. El proveedor no pudo prestar el servicio…"
-                        rows={3}
-                        maxLength={500}
-                        disabled={refundLoading}
-                      />
-                    </div>
-                    {refundTarget.requiresForce && (
-                      <label className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 cursor-pointer">
-                        <Checkbox
-                          checked={refundForce}
-                          onCheckedChange={(v) => setRefundForce(v === true)}
-                          disabled={refundLoading}
-                          className="mt-0.5"
-                        />
-                        <span>
-                          <strong>Forzar reembolso:</strong> la entrega ya fue
-                          verificada. Confirma que quieres reembolsar de todos
-                          modos.
-                        </span>
-                      </label>
-                    )}
-                  </>
-                ) : null}
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-          {refundError && (
-            <p className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">
-              {refundError}
-            </p>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={refundLoading}
-              onClick={closeRefund}
-            >
-              Cancelar
-            </Button>
-            <Button
-              disabled={refundLoading}
-              className="bg-purple-700 hover:bg-purple-800"
-              onClick={confirmRefund}
-            >
-              {refundLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <Undo2 className="h-4 w-4 mr-1" />
-                  Confirmar reembolso
-                </>
-              )}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
