@@ -34,6 +34,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
 import {
   Tooltip,
   TooltipContent,
@@ -208,6 +209,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
   const watchBenefitType = form.watch("benefit_type")
   const watchHasLimitedStock = form.watch("has_limited_stock")
   const watchIsReferralOnly = form.watch("is_referral_only")
+  const watchMinReferralPoints = form.watch("min_referral_points_required")
 
   const allowedBenefitTypes = BENEFIT_TYPES_BY_PUBLICATION_TYPE[watchType]
 
@@ -264,9 +266,8 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
       points_required: 0,
       points_cost: 0,
       is_referral_only: values.is_referral_only,
-      min_referral_points_required: values.is_referral_only
-        ? values.min_referral_points_required
-        : 0,
+      min_referral_points_required:
+        values.type === "service" ? 0 : values.min_referral_points_required,
       is_single_use_per_user: values.is_single_use_per_user,
       stock_total: values.has_limited_stock ? (values.stock_total ?? null) : null,
       start_date: values.start_date.toISOString(),
@@ -376,6 +377,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
                     form.setValue("type", t)
                     if (t === "service") {
                       form.setValue("benefit_type", "service")
+                      form.setValue("min_referral_points_required", 0)
                     } else if (form.getValues("benefit_type") === "service") {
                       form.setValue("benefit_type", "discount")
                     }
@@ -552,50 +554,70 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
         </CardContent>
       </Card>
 
-      {/* Referrals */}
+      {/* Acceso y referidos */}
       <Card className="border-border/60">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold">Referidos</CardTitle>
+          <CardTitle className="text-sm font-semibold">Acceso y referidos</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-xs font-medium">Solo por referidos</Label>
-              <p className="text-xs text-muted-foreground">
-                Solo usuarios con referidos pueden acceder
-              </p>
-            </div>
-            <Switch
-              checked={watchIsReferralOnly}
-              onCheckedChange={(v) => {
-                form.setValue("is_referral_only", v)
-                if (!v) {
-                  form.setValue("min_referral_points_required", 0)
-                }
-              }}
-            />
-          </div>
-
-          {watchIsReferralOnly && (
+          {watchType === "promotion" && (
             <div className="space-y-2">
-              {/* Saldo mínimo del wallet (`min_referral_points_required` en API) */}
-              <Label className="text-xs font-medium">
-                {KYNOO_POINTS_BRAND} mínimos requeridos
-              </Label>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Label className="text-xs font-medium">
+                  {KYNOO_POINTS_BRAND} mínimos para canjear
+                </Label>
+                {Number(watchMinReferralPoints) > 0 ? (
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-normal tabular-nums bg-orange-50 text-orange-700 border-orange-200"
+                  >
+                    {watchMinReferralPoints} pts mín.
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-normal bg-emerald-50 text-emerald-700 border-emerald-200"
+                  >
+                    Gratis
+                  </Badge>
+                )}
+              </div>
               <Input
                 type="number"
                 min={0}
                 {...form.register("min_referral_points_required")}
                 className="h-9 w-[200px]"
               />
+              <p className="text-xs text-muted-foreground">
+                {Number(watchMinReferralPoints) > 0
+                  ? `El usuario debe tener al menos ${watchMinReferralPoints} ${KYNOO_POINTS_BRAND} (no se descuentan).`
+                  : "0 = Gratis. Cualquier usuario puede canjear sin mínimo de puntos."}
+              </p>
             </div>
           )}
 
           <div className="flex items-center justify-between">
             <div>
+              <Label className="text-xs font-medium">Solo por referidos</Label>
+              <p className="text-xs text-muted-foreground">
+                {watchType === "service"
+                  ? "Marca el servicio como exclusivo de referidos en la app"
+                  : "Marca la promoción como exclusiva de referidos en la app"}
+              </p>
+            </div>
+            <Switch
+              checked={watchIsReferralOnly}
+              onCheckedChange={(v) => form.setValue("is_referral_only", v)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
               <Label className="text-xs font-medium">Uso único por usuario</Label>
               <p className="text-xs text-muted-foreground">
-                Cada usuario solo puede canjear una vez
+                {watchType === "service"
+                  ? "Cada usuario solo puede comprar una vez"
+                  : "Cada usuario solo puede canjear una vez"}
               </p>
             </div>
             <Switch

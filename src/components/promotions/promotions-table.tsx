@@ -137,6 +137,7 @@ export function PromotionsTable({
                 <TableHead className="text-xs font-medium">Título</TableHead>
                 <TableHead className="text-xs font-medium">Tipo</TableHead>
                 <TableHead className="text-xs font-medium">Beneficio</TableHead>
+                <TableHead className="text-xs font-medium">Condición</TableHead>
                 <TableHead className="text-xs font-medium">Estado</TableHead>
                 <TableHead className="text-xs font-medium">Stock</TableHead>
                 <TableHead className="text-xs font-medium">Fechas</TableHead>
@@ -173,6 +174,43 @@ export function PromotionsTable({
                       {BENEFIT_TYPE_LABELS[promo.benefit_type] ||
                         promo.benefit_type}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {promo.type === "service" ? (
+                      promo.service_price != null &&
+                      Number(promo.service_price) > 0 ? (
+                        <Badge
+                          variant="outline"
+                          className="text-xs font-normal tabular-nums bg-sky-50 text-sky-700 border-sky-200"
+                        >
+                          {Number(promo.service_price).toLocaleString("es-EC", {
+                            style: "currency",
+                            currency: "USD",
+                          })}
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="text-xs font-normal bg-slate-50 text-slate-600 border-slate-200"
+                        >
+                          Sin precio
+                        </Badge>
+                      )
+                    ) : promo.min_referral_points_required > 0 ? (
+                      <Badge
+                        variant="outline"
+                        className="text-xs font-normal tabular-nums bg-orange-50 text-orange-700 border-orange-200"
+                      >
+                        {promo.min_referral_points_required} pts mín.
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="text-xs font-normal bg-emerald-50 text-emerald-700 border-emerald-200"
+                      >
+                        Gratis
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell>
                     <StatusBadge
