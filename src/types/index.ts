@@ -650,6 +650,7 @@ export type PromotionOrderFulfillmentPhase =
   | "submitted"
   | "verified"
   | "rejected"
+  | "refunded"
 
 export interface PromotionOrderFulfillment {
   id: string
@@ -717,6 +718,7 @@ export interface AdminPromotionOrderFulfillment extends PromotionOrderFulfillmen
   provider_business_name?: string | null
   paid_at?: string | null
   nuvei_transaction_id?: string | null
+  order_status: string
 }
 
 export interface AdminPromotionOrderFulfillmentDetail
@@ -735,6 +737,54 @@ export interface AdminPromotionOrderFulfillmentList {
 export interface PromotionFulfillmentReviewAction {
   status: "verified" | "rejected"
   admin_notes?: string | null
+}
+
+export interface AdminPromotionPaidOrderSummary {
+  id: string
+  status: PromotionPaidOrderStatus
+  amount_usd: number | string
+  currency: string
+  nuvei_transaction_id?: string | null
+  promotion_title_snapshot: string
+  buyer_full_name: string
+  buyer_email: string
+  buyer_phone?: string | null
+  paid_at?: string | null
+  fulfillment_phase?: string | null
+  fulfillment_status?: string | null
+  refundable: boolean
+  requires_force: boolean
+}
+
+export interface AdminPromotionPaidOrderListItem
+  extends AdminPromotionPaidOrderSummary {
+  provider_name: string
+  provider_email: string
+  provider_business_name?: string | null
+  created_at: string
+}
+
+export interface AdminPromotionPaidOrderList {
+  items: AdminPromotionPaidOrderListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface AdminPromotionPaidOrderRefundResponse {
+  id: string
+  status: PromotionPaidOrderStatus
+  amount_usd: number | string
+  currency: string
+  nuvei_transaction_id?: string | null
+  promotion_title_snapshot: string
+  buyer_full_name: string
+  buyer_email: string
+  refund_reason: string
+  force_applied: boolean
+  stock_restored: boolean
+  fulfillment_phase_at_refund?: string | null
+  message: string
 }
 
 export interface AdminProviderOption {

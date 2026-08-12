@@ -23,6 +23,9 @@ import type {
   ProviderCreditOrderRefundResponse,
   AdminPromotionOrderFulfillmentList,
   AdminPromotionOrderFulfillmentDetail,
+  AdminPromotionPaidOrderSummary,
+  AdminPromotionPaidOrderList,
+  AdminPromotionPaidOrderRefundResponse,
   PromotionFulfillmentReviewAction,
   AdminProviderList,
   AdminCreateProviderRequest,
@@ -420,5 +423,34 @@ export const adminApi = {
       }
       return res.blob()
     },
+  },
+
+  promotionOrders: {
+    list: (params: {
+      limit?: number
+      offset?: number
+      status?: string
+      fulfillment_phase?: string
+      search?: string
+      date_from?: string
+      date_to?: string
+    }) =>
+      apiClient<AdminPromotionPaidOrderList>(
+        `/admin/promotion-orders${buildQuery(params)}`,
+      ),
+
+    get: (orderId: string) =>
+      apiClient<AdminPromotionPaidOrderSummary>(
+        `/admin/promotion-orders/${orderId}`,
+      ),
+
+    refund: (
+      orderId: string,
+      data: { reason: string; force?: boolean },
+    ) =>
+      apiClient<AdminPromotionPaidOrderRefundResponse>(
+        `/admin/promotion-orders/${orderId}/refund`,
+        { method: "POST", body: JSON.stringify(data) },
+      ),
   },
 }

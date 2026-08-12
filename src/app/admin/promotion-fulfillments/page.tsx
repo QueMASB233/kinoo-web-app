@@ -12,9 +12,11 @@ import {
   Loader2,
   RotateCcw,
   Search,
+  Undo2,
   XCircle,
 } from "lucide-react"
 import { AdminCsvExportDialog } from "@/components/admin/admin-csv-export-dialog"
+import { AdminPromotionOrdersTab } from "@/components/admin/admin-promotion-orders-tab"
 import { adminApi } from "@/lib/admin-api"
 import { ApiError } from "@/lib/api-client"
 import { useAdminBadges } from "@/providers/admin-provider"
@@ -24,6 +26,7 @@ import {
   ADMIN_FILTER_PANEL_CLASS,
   ADMIN_FILTER_SELECT_CLASS,
   FULFILLMENT_STATUS_LABELS,
+  PROMOTION_PAID_ORDER_STATUS_LABELS,
 } from "@/lib/constants"
 import type {
   AdminPromotionOrderFulfillment,
@@ -31,6 +34,7 @@ import type {
   AdminPromotionOrderFulfillmentList,
 } from "@/types"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -39,6 +43,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 
 const LIMIT = 25
@@ -50,6 +55,13 @@ const STATUS_STYLES: Record<string, string> = {
   rejected: "bg-red-50 text-red-700",
 }
 
+const ORDER_STATUS_STYLES: Record<string, string> = {
+  paid: "bg-emerald-50 text-emerald-700",
+  refunded: "bg-purple-50 text-purple-800",
+  failed: "bg-red-50 text-red-700",
+  cancelled: "bg-gray-100 text-gray-600",
+}
+
 const STATUS_FILTER_OPTIONS = [
   { value: "submitted", label: "En revisión (pendientes)" },
   { value: "", label: "Todos los estados" },
@@ -58,12 +70,48 @@ const STATUS_FILTER_OPTIONS = [
   { value: "rejected", label: "Rechazadas" },
 ]
 
+type RefundTarget = {
+  orderId: string
+  amountUsd: string | number
+  buyerName: string
+  buyerEmail: string
+  promotionTitle: string
+  nuveiTxId?: string | null
+  fulfillmentStatus?: string | null
+  orderStatus: string
+  requiresForce: boolean
+}
+
 function statusStyle(status: string) {
   return STATUS_STYLES[status] || "bg-gray-100 text-gray-600"
 }
 
 function statusLabel(status: string) {
   return FULFILLMENT_STATUS_LABELS[status] || status
+}
+
+function orderStatusStyle(status: string) {
+  return ORDER_STATUS_STYLES[status] || "bg-gray-100 text-gray-600"
+}
+
+function orderStatusLabel(status: string) {
+  return PROMOTION_PAID_ORDER_STATUS_LABELS[status] || status
+}
+
+function refundTargetFromFulfillment(
+  item: AdminPromotionOrderFulfillment,
+): RefundTarget {
+  return {
+    orderId: item.order_id,
+    amountUsd: item.amount_usd,
+    buyerName: item.buyer_full_name,
+    buyerEmail: item.buyer_email,
+    promotionTitle: item.promotion_title_snapshot,
+    nuveiTxId: item.nuvei_transaction_id,
+    fulfillmentStatus: item.status,
+    orderStatus: item.order_status,
+    requiresForce: item.status === "verified",
+  }
 }
 
 export default function AdminPromotionFulfillmentsPage() {
@@ -90,6 +138,15 @@ export default function AdminPromotionFulfillmentsPage() {
   const [adminNotes, setAdminNotes] = useState("")
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
+  const [mainTab, setMainTab] = useState<"orders" | "fulfillments">(
+    "fulfillments",
+  )
+
+  const [refundTarget, setRefundTarget] = useState<RefundTarget | null>(null)
+  const [refundReason, setRefundReason] = useState("")
+  const [refundForce, setRefundForce] = useState(false)
+  const [refundLoading, setRefundLoading] = useState(false)
+  const [refundError, setRefundError] = useState<string | null>(null)
 
   const fetchFulfillments = useCallback(async () => {
     setIsLoading(true)
@@ -157,6 +214,59 @@ export default function AdminPromotionFulfillmentsPage() {
     setAdminNotes("")
   }
 
+  function openRefund(target: RefundTarget) {
+    setRefundTarget(target)
+    setRefundReason("")
+    setRefundForce(false)
+    setRefundError(null)
+  }
+
+  function closeRefund() {
+    if (refundLoading) return
+    setRefundTarget(null)
+    setRefundReason("")
+    setRefundForce(false)
+    setRefundError(null)
+  }
+
+  async function confirmRefund() {
+    if (!refundTarget) return
+    const reason = refundReason.trim()
+    if (!reason) {
+      setRefundError("El motivo del reembolso es obligatorio.")
+      return
+    }
+    if (refundTarget.requiresForce && !refundForce) {
+      setRefundError(
+        "Esta entrega ya fue verificada. Marca “Forzar reembolso” para continuar.",
+      )
+      return
+    }
+
+    setRefundLoading(true)
+    setRefundError(null)
+    try {
+      const res = await adminApi.promotionOrders.refund(refundTarget.orderId, {
+        reason,
+        force: refundTarget.requiresForce ? refundForce : false,
+      })
+      closeRefund()
+      closeReview()
+      setSuccessMessage(res.message || "Reembolso procesado correctamente")
+      await fetchFulfillments()
+    } catch (e) {
+      setRefundError(
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "No se pudo procesar el reembolso",
+      )
+    } finally {
+      setRefundLoading(false)
+    }
+  }
+
   async function submitReview(decision: "verified" | "rejected") {
     if (!reviewTarget) return
     const wasPendingReview = reviewTarget.status === "submitted"
@@ -195,11 +305,54 @@ export default function AdminPromotionFulfillmentsPage() {
 
   return (
     <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold text-[#111827]">Servicios</h1>
+        <p className="mt-1 text-sm text-gray-500 max-w-2xl">
+          Órdenes de pago de reservas y evidencias de entrega enviadas por
+          proveedores.
+        </p>
+      </div>
+
+      {successMessage && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 flex justify-between gap-2">
+          <span>{successMessage}</span>
+          <button
+            type="button"
+            className="text-emerald-600 hover:text-emerald-900 shrink-0"
+            onClick={() => setSuccessMessage(null)}
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
+
+      <Tabs
+        value={mainTab}
+        onValueChange={(v) =>
+          setMainTab(v === "orders" ? "orders" : "fulfillments")
+        }
+        className="space-y-4"
+      >
+        <TabsList>
+          <TabsTrigger value="fulfillments">Entregas de servicio</TabsTrigger>
+          <TabsTrigger value="orders">Órdenes de pago</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="orders" className="space-y-4 mt-0">
+          <AdminPromotionOrdersTab
+            onRefundSuccess={(message) => {
+              setSuccessMessage(message)
+              void fetchFulfillments()
+            }}
+          />
+        </TabsContent>
+
+        <TabsContent value="fulfillments" className="space-y-4 mt-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-semibold text-[#111827]">
+          <h2 className="text-base font-semibold text-[#111827]">
             Entregas de servicio
-          </h1>
+          </h2>
           {result && (
             <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
               {result.total} registro{result.total !== 1 && "s"}
@@ -221,19 +374,6 @@ export default function AdminPromotionFulfillmentsPage() {
         Evidencias enviadas por proveedores tras prestar el servicio reservado.
         Revisa la foto y descripción antes de aprobar o rechazar.
       </p>
-
-      {successMessage && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 flex justify-between gap-2">
-          <span>{successMessage}</span>
-          <button
-            type="button"
-            className="text-emerald-600 hover:text-emerald-900 shrink-0"
-            onClick={() => setSuccessMessage(null)}
-          >
-            Cerrar
-          </button>
-        </div>
-      )}
 
       <div className={ADMIN_FILTER_PANEL_CLASS}>
         <div className="flex flex-wrap items-end gap-3">
@@ -335,7 +475,8 @@ export default function AdminPromotionFulfillmentsPage() {
                   <th className="px-4 py-3">Proveedor</th>
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Monto</th>
-                  <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3">Entrega</th>
+                  <th className="px-4 py-3">Pago</th>
                   <th className="px-4 py-3">Enviado</th>
                   <th className="px-4 py-3 text-right">Acciones</th>
                 </tr>
@@ -372,6 +513,13 @@ export default function AdminPromotionFulfillmentsPage() {
                         {statusLabel(item.status)}
                       </span>
                     </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ${orderStatusStyle(item.order_status)}`}
+                      >
+                        {orderStatusLabel(item.order_status)}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                       {item.submitted_at
                         ? format(
@@ -382,14 +530,29 @@ export default function AdminPromotionFulfillmentsPage() {
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openReview(item)}
-                      >
-                        <Eye className="h-3.5 w-3.5 mr-1" />
-                        {item.status === "submitted" ? "Revisar" : "Ver"}
-                      </Button>
+                      <div className="inline-flex flex-wrap justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openReview(item)}
+                        >
+                          <Eye className="h-3.5 w-3.5 mr-1" />
+                          {item.status === "submitted" ? "Revisar" : "Ver"}
+                        </Button>
+                        {item.order_status === "paid" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-purple-700 border-purple-200 hover:bg-purple-50"
+                            onClick={() =>
+                              openRefund(refundTargetFromFulfillment(item))
+                            }
+                          >
+                            <Undo2 className="h-3.5 w-3.5 mr-1" />
+                            Reembolsar
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -412,24 +575,46 @@ export default function AdminPromotionFulfillmentsPage() {
                       {item.provider_business_name || item.provider_name}
                     </p>
                   </div>
-                  <span
-                    className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${statusStyle(item.status)}`}
-                  >
-                    {statusLabel(item.status)}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span
+                      className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${statusStyle(item.status)}`}
+                    >
+                      {statusLabel(item.status)}
+                    </span>
+                    <span
+                      className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${orderStatusStyle(item.order_status)}`}
+                    >
+                      {orderStatusLabel(item.order_status)}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-sm text-gray-700">
                   {item.buyer_full_name} · ${Number(item.amount_usd).toFixed(2)}
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => openReview(item)}
-                >
-                  <Eye className="h-3.5 w-3.5 mr-1" />
-                  {item.status === "submitted" ? "Revisar" : "Ver detalle"}
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => openReview(item)}
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-1" />
+                    {item.status === "submitted" ? "Revisar" : "Ver detalle"}
+                  </Button>
+                  {item.order_status === "paid" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-purple-700 border-purple-200"
+                      onClick={() =>
+                        openRefund(refundTargetFromFulfillment(item))
+                      }
+                    >
+                      <Undo2 className="h-3.5 w-3.5 mr-1" />
+                      Reembolsar
+                    </Button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -461,6 +646,8 @@ export default function AdminPromotionFulfillmentsPage() {
           )}
         </>
       )}
+        </TabsContent>
+      </Tabs>
 
       <AdminCsvExportDialog
         open={exportOpen}
@@ -511,6 +698,19 @@ export default function AdminPromotionFulfillmentsPage() {
                               locale: es,
                             })
                           : "—"}
+                      </p>
+                      {detail.nuvei_transaction_id && (
+                        <p className="text-xs font-mono text-gray-500 mt-1">
+                          TX: {detail.nuvei_transaction_id}
+                        </p>
+                      )}
+                      <p className="text-xs mt-1">
+                        Pago:{" "}
+                        <span
+                          className={`inline-flex rounded px-1.5 py-0.5 text-[11px] font-medium ${orderStatusStyle(detail.order_status)}`}
+                        >
+                          {orderStatusLabel(detail.order_status)}
+                        </span>
                       </p>
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-xs">
@@ -597,52 +797,179 @@ export default function AdminPromotionFulfillmentsPage() {
               {reviewError}
             </p>
           )}
-          {detail?.status === "submitted" && !detailLoading && (
-            <DialogFooter className="flex-col sm:flex-row gap-2">
-              <Button
-                variant="outline"
-                disabled={reviewLoading}
-                onClick={closeReview}
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="destructive"
-                disabled={reviewLoading}
-                onClick={() => submitReview("rejected")}
-              >
-                {reviewLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <XCircle className="h-4 w-4 mr-1" />
-                    Rechazar
-                  </>
+          {detail && !detailLoading && (
+            <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-between">
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                {detail.order_status === "paid" && (
+                  <Button
+                    variant="outline"
+                    className="text-purple-700 border-purple-200"
+                    disabled={reviewLoading}
+                    onClick={() => {
+                      openRefund(refundTargetFromFulfillment(detail))
+                    }}
+                  >
+                    <Undo2 className="h-4 w-4 mr-1" />
+                    Reembolsar
+                  </Button>
                 )}
-              </Button>
-              <Button
-                disabled={reviewLoading}
-                className="bg-emerald-600 hover:bg-emerald-700"
-                onClick={() => submitReview("verified")}
-              >
-                {reviewLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:ml-auto">
+                {detail.status === "submitted" &&
+                detail.order_status === "paid" ? (
                   <>
-                    <CheckCircle2 className="h-4 w-4 mr-1" />
-                    Aprobar
+                    <Button
+                      variant="outline"
+                      disabled={reviewLoading}
+                      onClick={closeReview}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      disabled={reviewLoading}
+                      onClick={() => submitReview("rejected")}
+                    >
+                      {reviewLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <XCircle className="h-4 w-4 mr-1" />
+                          Rechazar
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      disabled={reviewLoading}
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                      onClick={() => submitReview("verified")}
+                    >
+                      {reviewLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 mr-1" />
+                          Aprobar
+                        </>
+                      )}
+                    </Button>
                   </>
+                ) : (
+                  <Button variant="outline" onClick={closeReview}>
+                    Cerrar
+                  </Button>
                 )}
-              </Button>
+              </div>
             </DialogFooter>
           )}
-          {detail && detail.status !== "submitted" && !detailLoading && (
-            <DialogFooter>
-              <Button variant="outline" onClick={closeReview}>
-                Cerrar
-              </Button>
-            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!refundTarget}
+        onOpenChange={(open) => !open && closeRefund()}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reembolsar reserva</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 text-sm text-muted-foreground pt-1">
+                {refundTarget ? (
+                  <>
+                    <p>
+                      Se devolverá{" "}
+                      <strong className="text-foreground">
+                        ${Number(refundTarget.amountUsd).toFixed(2)} USD
+                      </strong>{" "}
+                      a <strong className="text-foreground">{refundTarget.buyerName}</strong>{" "}
+                      ({refundTarget.buyerEmail}) por{" "}
+                      <strong className="text-foreground">
+                        {refundTarget.promotionTitle}
+                      </strong>
+                      .
+                    </p>
+                    {refundTarget.nuveiTxId && (
+                      <p className="text-xs font-mono bg-gray-50 rounded px-2 py-1.5">
+                        TX: {refundTarget.nuveiTxId}
+                      </p>
+                    )}
+                    {refundTarget.fulfillmentStatus && (
+                      <p className="text-xs">
+                        Fase entrega:{" "}
+                        <strong>{statusLabel(refundTarget.fulfillmentStatus)}</strong>
+                      </p>
+                    )}
+                    {!refundTarget.fulfillmentStatus && (
+                      <p className="text-xs text-amber-700">
+                        Esta reserva aún no tiene fila de entrega (pendiente de
+                        contactar).
+                      </p>
+                    )}
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor="refund-reason"
+                        className="text-xs font-medium text-gray-700 block"
+                      >
+                        Motivo del reembolso (obligatorio)
+                      </label>
+                      <Textarea
+                        id="refund-reason"
+                        value={refundReason}
+                        onChange={(e) => setRefundReason(e.target.value)}
+                        placeholder="Ej. El proveedor no pudo prestar el servicio…"
+                        rows={3}
+                        maxLength={500}
+                        disabled={refundLoading}
+                      />
+                    </div>
+                    {refundTarget.requiresForce && (
+                      <label className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 cursor-pointer">
+                        <Checkbox
+                          checked={refundForce}
+                          onCheckedChange={(v) => setRefundForce(v === true)}
+                          disabled={refundLoading}
+                          className="mt-0.5"
+                        />
+                        <span>
+                          <strong>Forzar reembolso:</strong> la entrega ya fue
+                          verificada. Confirma que quieres reembolsar de todos
+                          modos.
+                        </span>
+                      </label>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          {refundError && (
+            <p className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">
+              {refundError}
+            </p>
           )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={refundLoading}
+              onClick={closeRefund}
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={refundLoading}
+              className="bg-purple-700 hover:bg-purple-800"
+              onClick={confirmRefund}
+            >
+              {refundLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Undo2 className="h-4 w-4 mr-1" />
+                  Confirmar reembolso
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

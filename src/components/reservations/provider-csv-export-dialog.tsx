@@ -43,6 +43,7 @@ const FULFILLMENT_PHASE_EXPORT_OPTIONS: { value: string; label: string }[] = [
       "submitted",
       "verified",
       "rejected",
+      "refunded",
     ] as const
   ).map((value) => ({
     value,

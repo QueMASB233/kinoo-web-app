@@ -85,7 +85,7 @@ export function AdminSidebar({ userName, onLogout }: AdminSidebarProps) {
     },
     {
       icon: PackageCheck,
-      label: "Entregas de servicio",
+      label: "Servicios",
       href: ROUTES.ADMIN_PROMOTION_FULFILLMENTS,
       badge: pendingFulfillmentCount,
     },

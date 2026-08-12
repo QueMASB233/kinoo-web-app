@@ -34,6 +34,28 @@ export function ReservationFulfillmentPanel({
     null,
   )
 
+  if (order.status === "refunded") {
+    return (
+      <section className="rounded-lg border border-border/60 p-5 space-y-3 bg-white">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-foreground">
+            Entrega del servicio
+          </h3>
+          <FulfillmentPhaseBadge phase="refunded" />
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Esta reserva fue reembolsada. Ya no se puede registrar contacto ni
+          evidencia de entrega.
+        </p>
+        {order.fulfillment?.admin_notes ? (
+          <p className="text-sm text-muted-foreground bg-zinc-50 border border-border/60 rounded-md p-3">
+            {order.fulfillment.admin_notes}
+          </p>
+        ) : null}
+      </section>
+    )
+  }
+
   if (order.status !== "paid") {
     return null
   }

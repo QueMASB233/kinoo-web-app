@@ -126,6 +126,7 @@ export const FULFILLMENT_PHASE_LABELS: Record<string, string> = {
   submitted: "En revisión",
   verified: "Verificado",
   rejected: "Rechazado",
+  refunded: "Reembolsada",
   not_applicable: "—",
 }
 

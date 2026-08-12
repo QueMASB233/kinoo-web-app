@@ -9,6 +9,7 @@ const phaseStyles: Record<string, string> = {
   submitted: "bg-violet-50 text-violet-800 border-violet-200",
   verified: "bg-emerald-50 text-emerald-800 border-emerald-200",
   rejected: "bg-red-50 text-red-800 border-red-200",
+  refunded: "bg-purple-50 text-purple-800 border-purple-200",
   not_applicable: "bg-zinc-50 text-zinc-500 border-zinc-200",
 }
 
