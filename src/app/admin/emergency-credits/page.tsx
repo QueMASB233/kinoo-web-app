@@ -15,6 +15,8 @@ import {
   Undo2,
 } from "lucide-react"
 import type { PaginatedActiveCredits } from "@/types"
+import { AdminEmergencyOrdersTab } from "@/components/admin/admin-emergency-orders-tab"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const LIMIT = 25
 
@@ -73,6 +75,8 @@ export default function EmergencyCreditsPage() {
   const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
+  const [mainTab, setMainTab] = useState<"credits" | "orders">("credits")
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const fetchCredits = useCallback(async () => {
     setIsLoading(true)
@@ -159,6 +163,41 @@ export default function EmergencyCreditsPage() {
 
   return (
     <div className="space-y-6">
+      {successMessage && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 flex justify-between gap-2">
+          <span>{successMessage}</span>
+          <button
+            type="button"
+            className="text-emerald-600 hover:text-emerald-900 shrink-0"
+            onClick={() => setSuccessMessage(null)}
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
+
+      <Tabs
+        value={mainTab}
+        onValueChange={(v) =>
+          setMainTab(v === "orders" ? "orders" : "credits")
+        }
+        className="space-y-4"
+      >
+        <TabsList>
+          <TabsTrigger value="credits">Créditos de emergencia</TabsTrigger>
+          <TabsTrigger value="orders">Órdenes de pago</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="orders" className="space-y-4 mt-0">
+          <AdminEmergencyOrdersTab
+            onRefundSuccess={(message) => {
+              setSuccessMessage(message)
+              void fetchCredits()
+            }}
+          />
+        </TabsContent>
+
+        <TabsContent value="credits" className="space-y-6 mt-0">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold text-[#111827]">
           Créditos de emergencia
@@ -406,6 +445,8 @@ export default function EmergencyCreditsPage() {
           </>
         )}
       </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

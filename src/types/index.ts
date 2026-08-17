@@ -386,6 +386,54 @@ export interface PaginatedActiveCredits {
   limit: number
 }
 
+export type EmergencyCreditOrderStatus =
+  | "pending"
+  | "processing"
+  | "paid"
+  | "failed"
+  | "expired"
+  | "cancelled"
+  | "refunded"
+
+export interface AdminEmergencyCreditOrderListItem {
+  id: string
+  status: EmergencyCreditOrderStatus
+  amount_usd: number | string
+  currency: string
+  nuvei_transaction_id?: string | null
+  paid_at?: string | null
+  created_at: string
+  buyer_full_name: string
+  buyer_email: string
+  emergency_credit_id?: string | null
+  credit_status?: string | null
+  credit_close_reason?: string | null
+  refundable: boolean
+  requires_force: boolean
+  credit_owns_cycle: boolean
+}
+
+export interface AdminEmergencyCreditOrderList {
+  items: AdminEmergencyCreditOrderListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface AdminEmergencyCreditOrderRefundResponse {
+  id: string
+  status: EmergencyCreditOrderStatus
+  amount_usd: number | string
+  currency: string
+  nuvei_transaction_id?: string | null
+  buyer_full_name: string
+  buyer_email: string
+  refund_reason: string
+  force_applied: boolean
+  credit_closed: boolean
+  message: string
+}
+
 export interface PromotionReviewAction {
   action: "approve" | "reject"
   reason?: string

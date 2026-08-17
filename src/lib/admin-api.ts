@@ -13,6 +13,8 @@ import type {
   PaginatedAuditLogs,
   PaginatedEvents,
   PaginatedActiveCredits,
+  AdminEmergencyCreditOrderList,
+  AdminEmergencyCreditOrderRefundResponse,
   PaginatedKnowledgeDocuments,
   KnowledgeDocumentResponse,
   KnowledgeDocumentDetail,
@@ -152,6 +154,27 @@ export const adminApi = {
       `/admin/emergency-credits/${creditId}/release`,
       { method: "POST" },
     ),
+
+  emergencyOrders: {
+    list: (params: {
+      limit?: number
+      offset?: number
+      status?: string
+      search?: string
+    }) =>
+      apiClient<AdminEmergencyCreditOrderList>(
+        `/admin/emergency-orders${buildQuery(params)}`,
+      ),
+
+    refund: (
+      orderId: string,
+      data: { reason: string; force?: boolean },
+    ) =>
+      apiClient<AdminEmergencyCreditOrderRefundResponse>(
+        `/admin/emergency-orders/${orderId}/refund`,
+        { method: "POST", body: JSON.stringify(data) },
+      ),
+  },
 
   knowledge: {
     list: (params?: {
