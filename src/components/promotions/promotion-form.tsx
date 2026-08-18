@@ -296,7 +296,8 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
         )
         toast({
           title: "Publicación creada",
-          description: "Ahora puedes agregar ubicaciones en el mapa.",
+          description:
+            "Ahora agrega las ubicaciones. Cuando el admin apruebe, se avisará a los usuarios de esa zona. Ten todos los puntos listos.",
         })
         router.push(ROUTES.EDIT_PROMOTION(created.id))
         return
@@ -712,7 +713,8 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
                   Guarda la publicación primero
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Después de crear la publicación podrás agregar ubicaciones en el mapa
+                  Después de crear la publicación podrás agregar ubicaciones en el mapa.
+                  Ten todos los puntos listos: al aprobar, se avisará a los usuarios de esa zona.
                 </p>
               </div>
             </div>

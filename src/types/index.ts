@@ -53,6 +53,26 @@ export interface UserResponse {
   interest_codes: string[] | null
 }
 
+export type PromotionNotificationDispatchStatus = "queued" | "skipped"
+export type PromotionNotificationDispatchReason =
+  | "already_notified"
+  | "no_locations"
+  | "admin_suspended"
+  | "notify_disabled"
+
+export interface PromotionNotificationDispatch {
+  status: PromotionNotificationDispatchStatus
+  reason?: PromotionNotificationDispatchReason | null
+}
+
+export interface PromotionNotifyUsersRequest {
+  force?: boolean
+}
+
+export interface PromotionNotifyUsersResponse {
+  status: "queued"
+}
+
 // ─── Promotion ───────────────────────────────────────────
 
 export interface Promotion {
@@ -93,11 +113,24 @@ export interface Promotion {
   admin_suspended: boolean
   admin_suspended_at: string | null
   admin_suspended_reason: string | null
+  /** Momento del último blast de zona. null = nunca. Ausente si el backend aún no lo envía. */
+  users_notified_at?: string | null
+  /** Usuarios del último blast. null si nunca se disparó. */
+  users_notified_count?: number | null
   created_at: string
   updated_at: string
   redemptions_count: number
   /** Presente en revisión pendiente (admin). */
   locations?: PromotionLocation[] | null
+  /** Solo en POST review: si el blast de zona se encoló o se omitió. */
+  notification?: PromotionNotificationDispatch | null
+}
+
+export interface PromotionNotificationAudience {
+  location_count: number
+  eligible_count: number
+  users_notified_at: string | null
+  users_notified_count: number | null
 }
 
 export interface CreatePromotionRequest {
@@ -437,6 +470,8 @@ export interface AdminEmergencyCreditOrderRefundResponse {
 export interface PromotionReviewAction {
   action: "approve" | "reject"
   reason?: string
+  /** Omitido: sí si nunca se notificó, no si ya. */
+  notify?: boolean
 }
 
 // ─── Knowledge Base ─────────────────────────────────────

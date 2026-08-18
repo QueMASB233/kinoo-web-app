@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { CreditsNonRefundableNotice } from "@/components/credits/credits-non-refundable-notice"
+import { PROVIDER_ZONE_NOTIFY_COPY } from "@/lib/promotion-notify"
 import { MapPin, X, Search, Loader2 } from "lucide-react"
 import Link from "next/link"
 import type {
@@ -586,6 +587,9 @@ export function LocationPicker({ promotionId, promotionType }: LocationPickerPro
         <Label className="text-xs font-medium">{heading}</Label>
         <p className="text-xs text-muted-foreground mt-0.5">
           {locations.length}/{MAX_LOCATIONS} ubicaciones
+        </p>
+        <p className="text-xs text-muted-foreground mt-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
+          {PROVIDER_ZONE_NOTIFY_COPY}
         </p>
       </div>
 

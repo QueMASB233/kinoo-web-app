@@ -21,6 +21,9 @@ import type {
   KnowledgeDocumentUpdate,
   Promotion,
   PromotionReviewAction,
+  PromotionNotificationAudience,
+  PromotionNotifyUsersRequest,
+  PromotionNotifyUsersResponse,
   AdminProviderCreditOrderList,
   ProviderCreditOrderRefundResponse,
   AdminPromotionOrderFulfillmentList,
@@ -354,6 +357,21 @@ export const adminApi = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    getNotificationAudience: (promotionId: string) =>
+      apiClient<PromotionNotificationAudience>(
+        `/admin/promotions/${promotionId}/notification-audience`,
+      ),
+    notifyUsers: (
+      promotionId: string,
+      data: PromotionNotifyUsersRequest = {},
+    ) =>
+      apiClient<PromotionNotifyUsersResponse>(
+        `/admin/promotions/${promotionId}/notify-users`,
+        {
+          method: "POST",
+          body: JSON.stringify({ force: data.force ?? false }),
+        },
+      ),
   },
 
   publications: {
@@ -375,9 +393,21 @@ export const adminApi = {
           body: JSON.stringify(data),
         },
       ),
-  },
-
-  referralCodes: {
+    getNotificationAudience: (promotionId: string) =>
+      apiClient<PromotionNotificationAudience>(
+        `/admin/promotions/${promotionId}/notification-audience`,
+      ),
+    notifyUsers: (
+      promotionId: string,
+      data: PromotionNotifyUsersRequest = {},
+    ) =>
+      apiClient<PromotionNotifyUsersResponse>(
+        `/admin/promotions/${promotionId}/notify-users`,
+        {
+          method: "POST",
+          body: JSON.stringify({ force: data.force ?? false }),
+        },
+      ),
     list: (params?: { search?: string; active_only?: boolean }) =>
       apiClient<AdminReferralCode[]>(
         `/admin/referral-codes${buildQuery(params || {})}`,

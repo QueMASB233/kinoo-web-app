@@ -40,8 +40,8 @@ export default function AdminPublicationsPage() {
         <h1 className="text-xl font-semibold text-gray-900">Publicaciones</h1>
         <p className="text-sm text-gray-500 mt-1">
           Promociones y servicios de todos los proveedores. Puedes suspender una
-          publicación para ocultarla en la app; el proveedor verá el estado pero
-          no podrá reactivarla hasta que la habilites.
+          publicación para ocultarla en la app, o notificar a los usuarios de la
+          zona (inventario que aún no recibió push).
         </p>
       </div>
 

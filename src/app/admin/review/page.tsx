@@ -17,8 +17,32 @@ import {
   Search,
   RotateCcw,
   MapPin,
+  Info,
 } from "lucide-react"
-import type { Promotion, PromotionLocation } from "@/types"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
+  ADMIN_RESEND_NOTIFY_WARNING,
+  formatUsersNotifiedAt,
+} from "@/lib/promotion-notify"
+import type {
+  Promotion,
+  PromotionLocation,
+  PromotionNotificationAudience,
+} from "@/types"
 
 export default function ReviewPage() {
   const [promotions, setPromotions] = useState<Promotion[]>([])
@@ -137,16 +161,47 @@ function ReviewCard({
   const [reason, setReason] = useState("")
   const [cardError, setCardError] = useState<string | null>(null)
   const [mapOpen, setMapOpen] = useState(false)
+  const [audience, setAudience] =
+    useState<PromotionNotificationAudience | null>(null)
+  const [audienceLoading, setAudienceLoading] = useState(false)
+  const alreadyNotified = Boolean(promo.users_notified_at)
+  const [notifyZone, setNotifyZone] = useState(
+    !alreadyNotified && (promo.locations?.length ?? 0) > 0,
+  )
+  const [resendOpen, setResendOpen] = useState(false)
 
   const locations: PromotionLocation[] = promo.locations ?? []
   const locationCount = locations.length
   const hasLocations = locationCount > 0
 
+  useEffect(() => {
+    if (!hasLocations) return
+    let cancelled = false
+    setAudienceLoading(true)
+    adminApi.promotionReview
+      .getNotificationAudience(promo.id)
+      .then((preview) => {
+        if (!cancelled) setAudience(preview)
+      })
+      .catch(() => {
+        if (!cancelled) setAudience(null)
+      })
+      .finally(() => {
+        if (!cancelled) setAudienceLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [promo.id, hasLocations])
+
   async function handleApprove() {
     setProcessing("approve")
     setCardError(null)
     try {
-      await adminApi.promotionReview.review(promo.id, { action: "approve" })
+      await adminApi.promotionReview.review(promo.id, {
+        action: "approve",
+        notify: hasLocations && notifyZone,
+      })
       notifyPendingReviewProcessed()
       onRemove()
     } catch (err) {
@@ -305,6 +360,87 @@ function ReviewCard({
             </div>
           </div>
 
+          <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+            <p className="text-xs font-medium text-gray-600">
+              Notificación a la zona
+            </p>
+            {!hasLocations ? (
+              <p className="text-xs text-amber-700">
+                Sin ubicaciones: no se enviará push aunque apruebes.
+              </p>
+            ) : (
+              <>
+                {alreadyNotified && promo.users_notified_at && (
+                  <p className="text-xs text-sky-800">
+                    Ya se notificó el {formatUsersNotifiedAt(promo.users_notified_at)}
+                    {promo.users_notified_count != null
+                      ? ` · ${promo.users_notified_count} usuarios`
+                      : ""}
+                    . Aprobar no vuelve a enviar.
+                  </p>
+                )}
+                {audienceLoading ? (
+                  <p className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Estimando audiencia…
+                  </p>
+                ) : audience ? (
+                  <p className="text-xs text-gray-600">
+                    {notifyZone
+                      ? `Se notificará a ~${audience.eligible_count} usuario${
+                          audience.eligible_count === 1 ? "" : "s"
+                        } en el área de estos puntos (GPS reciente + segmentación + push activo).`
+                      : `Audiencia actual: ~${audience.eligible_count} usuario${
+                          audience.eligible_count === 1 ? "" : "s"
+                        } (GPS reciente + segmentación + push activo).`}
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    No se pudo estimar la audiencia. El envío usará las reglas
+                    del servidor.
+                  </p>
+                )}
+                <label className="flex items-start gap-2 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={notifyZone}
+                    disabled={alreadyNotified && !notifyZone}
+                    onChange={(e) => setNotifyZone(e.target.checked)}
+                  />
+                  <span>Notificar a la zona al aprobar</span>
+                </label>
+                {alreadyNotified && !notifyZone && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setResendOpen(true)}
+                      className="text-xs font-medium text-sky-700 hover:underline"
+                    >
+                      Volver a notificar
+                    </button>
+                    <TooltipProvider delayDuration={150}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className="text-gray-400 hover:text-gray-600"
+                            aria-label="Aviso de reenvío"
+                          >
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs text-xs">
+                          {ADMIN_RESEND_NOTIFY_WARNING}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
           {promo.link && (
             <a
               href={promo.link}
@@ -346,7 +482,8 @@ function ReviewCard({
 
           {!hasLocations && (
             <p className="text-[11px] leading-snug text-amber-700">
-              Sin ubicaciones: aunque apruebes, no aparecerá en la app.
+              Sin ubicaciones: aunque apruebes, no aparecerá en la app ni se
+              enviará push.
             </p>
           )}
 
@@ -406,6 +543,36 @@ function ReviewCard({
         title={promo.title}
         locations={locations}
       />
+
+      <Dialog open={resendOpen} onOpenChange={setResendOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Volver a notificar</DialogTitle>
+            <DialogDescription>{ADMIN_RESEND_NOTIFY_WARNING}</DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-gray-700">
+            Al aprobar se enviará otro push a la zona de los puntos actuales.
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setResendOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setNotifyZone(true)
+                setResendOpen(false)
+              }}
+            >
+              Sí, notificar al aprobar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

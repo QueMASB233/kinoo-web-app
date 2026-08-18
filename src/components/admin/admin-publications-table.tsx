@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { AdminNotifyZoneButton } from "./admin-notify-zone-button"
 import { AdminSuspensionToggle } from "./admin-suspension-toggle"
 import type { Promotion, PromotionType } from "@/types"
 
@@ -211,6 +212,7 @@ export function AdminPublicationsTable({
                 <TableHead className="text-xs font-medium">Tipo</TableHead>
                 <TableHead className="text-xs font-medium">Beneficio</TableHead>
                 <TableHead className="text-xs font-medium">Estado</TableHead>
+                <TableHead className="text-xs font-medium">Aviso</TableHead>
                 <TableHead className="text-xs font-medium">Proveedor</TableHead>
                 <TableHead className="text-xs font-medium">Canjes</TableHead>
                 <TableHead className="text-xs font-medium">Fechas</TableHead>
@@ -248,6 +250,12 @@ export function AdminPublicationsTable({
                     >
                       {statusLabel(promo)}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="align-top">
+                    <AdminNotifyZoneButton
+                      promotion={promo}
+                      onUpdated={onPromotionUpdated}
+                    />
                   </TableCell>
                   <TableCell className="text-xs text-gray-500 max-w-[180px]">
                     {promo.provider_id ? (
