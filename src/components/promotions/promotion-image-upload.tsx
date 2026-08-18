@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react"
 import Image from "next/image"
-import { Upload, X } from "lucide-react"
+import { Loader2, Upload, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { optimizePromotionImageFile } from "@/lib/optimize-promotion-image"
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const
@@ -29,6 +30,7 @@ export function PromotionImageUpload({
   const fileRef = useRef<HTMLInputElement>(null)
   const [localPreview, setLocalPreview] = useState<string | null>(null)
   const [clientError, setClientError] = useState<string | null>(null)
+  const [optimizing, setOptimizing] = useState(false)
 
   useEffect(() => {
     if (!file) {
@@ -41,7 +43,7 @@ export function PromotionImageUpload({
     return () => URL.revokeObjectURL(preview)
   }, [file])
 
-  function handleFileChange(nextFile: File | null) {
+  async function handleFileChange(nextFile: File | null) {
     if (!nextFile) return
 
     if (!ACCEPTED_TYPES.includes(nextFile.type as (typeof ACCEPTED_TYPES)[number])) {
@@ -58,8 +60,22 @@ export function PromotionImageUpload({
       return
     }
 
+    setOptimizing(true)
     setClientError(null)
-    onFileChange(nextFile)
+    try {
+      const optimized = await optimizePromotionImageFile(nextFile)
+      onFileChange(optimized)
+    } catch (err) {
+      setClientError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo optimizar la imagen. Intenta con otro archivo.",
+      )
+      onFileChange(null)
+      if (fileRef.current) fileRef.current.value = ""
+    } finally {
+      setOptimizing(false)
+    }
   }
 
   function handleRemove() {
@@ -79,8 +95,8 @@ export function PromotionImageUpload({
         type="file"
         accept={ACCEPTED_TYPES.join(",")}
         className="hidden"
-        disabled={disabled}
-        onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+        disabled={disabled || optimizing}
+        onChange={(e) => void handleFileChange(e.target.files?.[0] ?? null)}
       />
 
       {previewSrc ? (
@@ -99,7 +115,7 @@ export function PromotionImageUpload({
               type="button"
               variant="outline"
               size="sm"
-              disabled={disabled}
+              disabled={disabled || optimizing}
               onClick={() => fileRef.current?.click()}
             >
               <Upload className="mr-2 h-4 w-4" />
@@ -109,7 +125,7 @@ export function PromotionImageUpload({
               type="button"
               variant="ghost"
               size="sm"
-              disabled={disabled}
+              disabled={disabled || optimizing}
               onClick={handleRemove}
             >
               <X className="mr-2 h-4 w-4" />
@@ -122,12 +138,14 @@ export function PromotionImageUpload({
           type="button"
           variant="outline"
           className="w-full justify-start gap-2 h-auto py-3"
-          disabled={disabled}
+          disabled={disabled || optimizing}
           onClick={() => fileRef.current?.click()}
         >
           <Upload className="h-4 w-4 shrink-0" />
           <span className="text-sm">
-            Seleccionar imagen (JPG, PNG, WebP, máx. 5 MB)
+            {optimizing
+              ? "Optimizando imagen…"
+              : "Seleccionar imagen (JPG, PNG, WebP, máx. 5 MB)"}
           </span>
         </Button>
       )}
@@ -136,9 +154,15 @@ export function PromotionImageUpload({
         <p className="text-xs text-destructive">{displayError}</p>
       ) : (
         <p className="text-xs text-muted-foreground">
-          La imagen se validará al guardar la publicación. Si no cumple las
-          políticas de contenido, podrás cambiarla sin perder el resto de los
-          datos.
+          {optimizing ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Convirtiendo a JPG y compactando para el aviso push (menos de 1
+              MB)…
+            </span>
+          ) : (
+            "Al elegirla se convierte a JPG y se optimiza para el push (menos de 1 MB). La validación de contenido se hace al guardar."
+          )}
         </p>
       )}
     </div>
