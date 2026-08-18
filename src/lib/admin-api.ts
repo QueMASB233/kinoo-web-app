@@ -408,6 +408,9 @@ export const adminApi = {
           body: JSON.stringify({ force: data.force ?? false }),
         },
       ),
+  },
+
+  referralCodes: {
     list: (params?: { search?: string; active_only?: boolean }) =>
       apiClient<AdminReferralCode[]>(
         `/admin/referral-codes${buildQuery(params || {})}`,
