@@ -212,7 +212,9 @@ export function AdminPublicationsTable({
                 <TableHead className="text-xs font-medium">Tipo</TableHead>
                 <TableHead className="text-xs font-medium">Beneficio</TableHead>
                 <TableHead className="text-xs font-medium">Estado</TableHead>
-                <TableHead className="text-xs font-medium">Aviso</TableHead>
+                <TableHead className="w-12 text-center text-xs font-medium">
+                  Aviso
+                </TableHead>
                 <TableHead className="text-xs font-medium">Proveedor</TableHead>
                 <TableHead className="text-xs font-medium">Canjes</TableHead>
                 <TableHead className="text-xs font-medium">Fechas</TableHead>
@@ -251,7 +253,7 @@ export function AdminPublicationsTable({
                       {statusLabel(promo)}
                     </Badge>
                   </TableCell>
-                  <TableCell className="align-top">
+                  <TableCell className="w-12 px-1 text-center">
                     <AdminNotifyZoneButton
                       promotion={promo}
                       onUpdated={onPromotionUpdated}
