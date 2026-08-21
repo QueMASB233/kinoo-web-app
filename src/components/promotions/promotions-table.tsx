@@ -29,7 +29,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { StatusBadge } from "./status-badge"
 import { ActiveToggle } from "./active-toggle"
-import { MoreHorizontal, Pencil, Search, PlusCircle } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { MoreHorizontal, Pencil, Search, PlusCircle, Users } from "lucide-react"
 import type { Promotion } from "@/types"
 
 type FilterTab = "all" | "active" | "inactive"
@@ -197,7 +203,7 @@ export function PromotionsTable({
                         </Badge>
                       )
                     ) : (
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex items-center gap-1.5 whitespace-nowrap">
                         {Number(promo.points_cost) > 0 ? (
                           <Badge
                             variant="outline"
@@ -214,21 +220,27 @@ export function PromotionsTable({
                           </Badge>
                         )}
                         {promo.is_referral_only ? (
-                          <Badge
-                            variant="outline"
-                            className="text-xs font-normal bg-amber-50 text-amber-800 border-amber-200"
-                          >
-                            Referidos
-                          </Badge>
-                        ) : null}
-                        {promo.is_referral_only &&
-                        Number(promo.min_referral_points_required) > 0 ? (
-                          <Badge
-                            variant="outline"
-                            className="text-xs font-normal tabular-nums bg-orange-50 text-orange-700 border-orange-200"
-                          >
-                            {Number(promo.min_referral_points_required)} pts mín.
-                          </Badge>
+                          <TooltipProvider delayDuration={150}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                                  aria-label="Solo por referidos"
+                                >
+                                  <Users className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-[220px] text-xs">
+                                <p className="font-medium">Solo por referidos</p>
+                                <p className="text-muted-foreground mt-0.5">
+                                  {Number(promo.min_referral_points_required) > 0
+                                    ? `Mín. ${Number(promo.min_referral_points_required)} pts.`
+                                    : "Sin mínimo extra de puntos."}
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         ) : null}
                       </div>
                     )}
