@@ -196,20 +196,41 @@ export function PromotionsTable({
                           Sin precio
                         </Badge>
                       )
-                    ) : promo.min_referral_points_required > 0 ? (
-                      <Badge
-                        variant="outline"
-                        className="text-xs font-normal tabular-nums bg-orange-50 text-orange-700 border-orange-200"
-                      >
-                        {promo.min_referral_points_required} pts mín.
-                      </Badge>
                     ) : (
-                      <Badge
-                        variant="outline"
-                        className="text-xs font-normal bg-emerald-50 text-emerald-700 border-emerald-200"
-                      >
-                        Gratis
-                      </Badge>
+                      <div className="flex flex-wrap gap-1">
+                        {Number(promo.points_cost) > 0 ? (
+                          <Badge
+                            variant="outline"
+                            className="text-xs font-normal tabular-nums bg-violet-50 text-violet-700 border-violet-200"
+                          >
+                            {Number(promo.points_cost)} pts
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="text-xs font-normal bg-emerald-50 text-emerald-700 border-emerald-200"
+                          >
+                            Gratis
+                          </Badge>
+                        )}
+                        {promo.is_referral_only ? (
+                          <Badge
+                            variant="outline"
+                            className="text-xs font-normal bg-amber-50 text-amber-800 border-amber-200"
+                          >
+                            Referidos
+                          </Badge>
+                        ) : null}
+                        {promo.is_referral_only &&
+                        Number(promo.min_referral_points_required) > 0 ? (
+                          <Badge
+                            variant="outline"
+                            className="text-xs font-normal tabular-nums bg-orange-50 text-orange-700 border-orange-200"
+                          >
+                            {Number(promo.min_referral_points_required)} pts mín.
+                          </Badge>
+                        ) : null}
+                      </div>
                     )}
                   </TableCell>
                   <TableCell>

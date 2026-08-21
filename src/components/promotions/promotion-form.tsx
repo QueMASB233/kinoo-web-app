@@ -81,6 +81,7 @@ const formSchema = z
   redeem_message: z.string().optional(),
   is_referral_only: z.boolean(),
   min_referral_points_required: z.coerce.number().min(0),
+  points_cost: z.coerce.number().min(0),
   is_single_use_per_user: z.boolean(),
   has_limited_stock: z.boolean(),
   stock_total: z.coerce.number().min(0).optional(),
@@ -162,7 +163,10 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
           redeem_message: initialData.redeem_message || "",
           is_referral_only: initialData.is_referral_only,
           min_referral_points_required:
-            initialData.min_referral_points_required,
+            initialData.is_referral_only
+              ? initialData.min_referral_points_required
+              : 0,
+          points_cost: initialData.points_cost ?? 0,
           is_single_use_per_user: initialData.is_single_use_per_user,
           has_limited_stock: initialData.stock_total != null,
           stock_total: initialData.stock_total ?? undefined,
@@ -188,6 +192,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
           redeem_message: "",
           is_referral_only: false,
           min_referral_points_required: 0,
+          points_cost: 0,
           is_single_use_per_user: true,
           has_limited_stock: false,
           stock_total: undefined,
@@ -210,6 +215,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
   const watchHasLimitedStock = form.watch("has_limited_stock")
   const watchIsReferralOnly = form.watch("is_referral_only")
   const watchMinReferralPoints = form.watch("min_referral_points_required")
+  const watchPointsCost = form.watch("points_cost")
 
   const allowedBenefitTypes = BENEFIT_TYPES_BY_PUBLICATION_TYPE[watchType]
 
@@ -254,8 +260,19 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
       }
     }
 
+    const publicationType =
+      mode === "edit" && initialData ? initialData.type : values.type
+    const isService = publicationType === "service"
+    const pointsCost = isService
+      ? 0
+      : Math.max(0, Math.floor(Number(values.points_cost) || 0))
+    const minReferralPoints =
+      isService || !values.is_referral_only
+        ? 0
+        : Math.max(0, Math.floor(Number(values.min_referral_points_required) || 0))
+
     const payload = {
-      type: mode === "edit" && initialData ? initialData.type : values.type,
+      type: publicationType,
       title: values.title,
       description: values.description || null,
       benefit_type: values.benefit_type,
@@ -264,10 +281,9 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
       coupon_code: values.coupon_code || null,
       redeem_message: values.redeem_message || null,
       points_required: 0,
-      points_cost: 0,
-      is_referral_only: values.is_referral_only,
-      min_referral_points_required:
-        values.type === "service" ? 0 : values.min_referral_points_required,
+      points_cost: pointsCost,
+      is_referral_only: Boolean(values.is_referral_only),
+      min_referral_points_required: minReferralPoints,
       is_single_use_per_user: values.is_single_use_per_user,
       stock_total: values.has_limited_stock ? (values.stock_total ?? null) : null,
       start_date: values.start_date.toISOString(),
@@ -379,6 +395,8 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
                     if (t === "service") {
                       form.setValue("benefit_type", "service")
                       form.setValue("min_referral_points_required", 0)
+                      form.setValue("points_cost", 0)
+                      form.setValue("is_referral_only", false)
                     } else if (form.getValues("benefit_type") === "service") {
                       form.setValue("benefit_type", "discount")
                     }
@@ -555,24 +573,27 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
         </CardContent>
       </Card>
 
-      {/* Acceso y referidos */}
+      {/* Puntos y acceso */}
       <Card className="border-border/60">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold">Acceso y referidos</CardTitle>
+          <CardTitle className="text-sm font-semibold">Puntos y acceso</CardTitle>
+          <CardDescription className="text-xs">
+            Define si cuesta puntos y si es solo para personas con referidos.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {watchType === "promotion" && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
-                <Label className="text-xs font-medium">
-                  {KYNOO_POINTS_BRAND} mínimos para canjear
+                <Label htmlFor="points_cost" className="text-xs font-medium">
+                  Costo en {KYNOO_POINTS_BRAND}
                 </Label>
-                {Number(watchMinReferralPoints) > 0 ? (
+                {Number(watchPointsCost) > 0 ? (
                   <Badge
                     variant="outline"
-                    className="text-xs font-normal tabular-nums bg-orange-50 text-orange-700 border-orange-200"
+                    className="text-xs font-normal tabular-nums bg-violet-50 text-violet-700 border-violet-200"
                   >
-                    {watchMinReferralPoints} pts mín.
+                    {watchPointsCost} pts
                   </Badge>
                 ) : (
                   <Badge
@@ -584,36 +605,86 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
                 )}
               </div>
               <Input
+                id="points_cost"
                 type="number"
                 min={0}
+                step={1}
+                inputMode="numeric"
+                {...form.register("points_cost")}
+                className="h-9 w-[200px]"
+              />
+              <p className="text-xs text-muted-foreground">
+                {Number(watchPointsCost) > 0
+                  ? `Se descontarán ${watchPointsCost} puntos al canjear.`
+                  : "0 = gratis. No se descuentan puntos."}
+              </p>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <Label className="text-xs font-medium">Solo por referidos</Label>
+              <p className="text-xs text-muted-foreground">
+                Quienes invitaron a alguien o llegaron con una invitación.
+              </p>
+            </div>
+            <Switch
+              checked={watchIsReferralOnly}
+              onCheckedChange={(v) => {
+                form.setValue("is_referral_only", v, { shouldDirty: true })
+                if (!v) {
+                  form.setValue("min_referral_points_required", 0, {
+                    shouldDirty: true,
+                  })
+                }
+              }}
+            />
+          </div>
+
+          {watchType === "promotion" && watchIsReferralOnly && (
+            <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 p-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Label
+                  htmlFor="min_referral_points_required"
+                  className="text-xs font-medium"
+                >
+                  Puntos mínimos
+                </Label>
+                {Number(watchMinReferralPoints) > 0 ? (
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-normal tabular-nums bg-orange-50 text-orange-700 border-orange-200"
+                  >
+                    {watchMinReferralPoints} pts mín.
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-normal bg-slate-50 text-slate-600 border-slate-200"
+                  >
+                    Sin mínimo extra
+                  </Badge>
+                )}
+              </div>
+              <Input
+                id="min_referral_points_required"
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
                 {...form.register("min_referral_points_required")}
                 className="h-9 w-[200px]"
               />
               <p className="text-xs text-muted-foreground">
                 {Number(watchMinReferralPoints) > 0
-                  ? `El usuario debe tener al menos ${watchMinReferralPoints} ${KYNOO_POINTS_BRAND} (no se descuentan).`
-                  : "0 = Gratis. Cualquier usuario puede canjear sin mínimo de puntos."}
+                  ? `Debe tener al menos ${watchMinReferralPoints} puntos (no se descuentan).`
+                  : "Opcional. 0 = solo aplica la regla de referidos."}
               </p>
             </div>
           )}
 
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-xs font-medium">Solo por referidos</Label>
-              <p className="text-xs text-muted-foreground">
-                {watchType === "service"
-                  ? "Marca el servicio como exclusivo de referidos en la app"
-                  : "Marca la promoción como exclusiva de referidos en la app"}
-              </p>
-            </div>
-            <Switch
-              checked={watchIsReferralOnly}
-              onCheckedChange={(v) => form.setValue("is_referral_only", v)}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
               <Label className="text-xs font-medium">Uso único por usuario</Label>
               <p className="text-xs text-muted-foreground">
                 {watchType === "service"
@@ -623,7 +694,9 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
             </div>
             <Switch
               checked={form.watch("is_single_use_per_user")}
-              onCheckedChange={(v) => form.setValue("is_single_use_per_user", v)}
+              onCheckedChange={(v) =>
+                form.setValue("is_single_use_per_user", v, { shouldDirty: true })
+              }
             />
           </div>
         </CardContent>
