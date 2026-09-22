@@ -52,7 +52,9 @@ import {
 } from "./user-targeting-section"
 import { LocationPicker } from "./location-picker"
 import { PromotionImageUpload } from "./promotion-image-upload"
-import { Loader2, ArrowLeft, Info, MapPin } from "lucide-react"
+import { PromotionVideoUpload } from "./promotion-video-upload"
+import { PromotionVideoThumbnailUpload } from "./promotion-video-thumbnail-upload"
+import { Loader2, ArrowLeft, Info, MapPin, ImageIcon, Film } from "lucide-react"
 import type {
   Promotion,
   PromotionType,
@@ -62,6 +64,15 @@ import type {
   PetFilters,
   UserFilters,
 } from "@/types"
+
+type PromotionMediaType = "image" | "video"
+
+function resolveInitialMediaType(promo?: Promotion): PromotionMediaType {
+  if (promo?.media_type === "video" || promo?.media_type === "image") {
+    return promo.media_type
+  }
+  return promo?.video_url ? "video" : "image"
+}
 
 // ─── Schema ──────────────────────────────────────────────
 
@@ -122,9 +133,27 @@ const IMAGE_UPLOAD_ERROR_TITLES = new Set([
   "Error al subir",
 ])
 
+const VIDEO_UPLOAD_ERROR_TITLES = new Set([
+  "Formato de video no válido",
+  "Video inválido",
+  "Duración de video inválida",
+  "Video demasiado largo",
+  "No se pudo validar el video",
+  "Archivo demasiado grande",
+  "Archivo inválido",
+  "Error al subir",
+  "Tiempo de espera",
+  "Servicio no disponible",
+])
+
 function isPromotionImageError(err: unknown, sentPhoto: boolean): boolean {
   if (!sentPhoto || !(err instanceof ApiError)) return false
   return IMAGE_UPLOAD_ERROR_TITLES.has(err.title || "")
+}
+
+function isPromotionVideoError(err: unknown, sentVideo: boolean): boolean {
+  if (!sentVideo || !(err instanceof ApiError)) return false
+  return VIDEO_UPLOAD_ERROR_TITLES.has(err.title || "")
 }
 
 // ─── Component ───────────────────────────────────────────
@@ -141,6 +170,17 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
   const [imageRemoved, setImageRemoved] = useState(false)
   const [imageError, setImageError] = useState<string | null>(null)
+  const [selectedVideoFile, setSelectedVideoFile] = useState<File | null>(null)
+  const [videoRemoved, setVideoRemoved] = useState(false)
+  const [videoError, setVideoError] = useState<string | null>(null)
+  const [selectedVideoThumbFile, setSelectedVideoThumbFile] =
+    useState<File | null>(null)
+  const [videoThumbRemoved, setVideoThumbRemoved] = useState(false)
+  const [videoThumbFromFrame, setVideoThumbFromFrame] = useState(false)
+  const [videoThumbError, setVideoThumbError] = useState<string | null>(null)
+  const [mediaType, setMediaType] = useState<PromotionMediaType>(() =>
+    resolveInitialMediaType(initialData),
+  )
   const [petFilters, setPetFilters] = useState<PetFilters>(
     () =>
       (initialData?.targeting?.pet_filters as PetFilters | undefined) || {},
@@ -228,6 +268,58 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
     }
   }, [watchType, watchBenefitType, allowedBenefitTypes, form])
 
+  function clearImageSide() {
+    setSelectedImageFile(null)
+    setImageRemoved(true)
+    setImageError(null)
+  }
+
+  function clearVideoSide() {
+    setSelectedVideoFile(null)
+    setVideoRemoved(true)
+    setVideoError(null)
+    setSelectedVideoThumbFile(null)
+    setVideoThumbRemoved(true)
+    setVideoThumbFromFrame(false)
+    setVideoThumbError(null)
+  }
+
+  function requestMediaTypeChange(next: PromotionMediaType) {
+    if (next === mediaType) return
+
+    const hasImageContent = Boolean(
+      selectedImageFile ||
+        (!imageRemoved && initialData?.image_url && mediaType === "image"),
+    )
+    const hasVideoContent = Boolean(
+      selectedVideoFile ||
+        selectedVideoThumbFile ||
+        (!videoRemoved && initialData?.video_url) ||
+        (!videoThumbRemoved && initialData?.video_thumbnail_url),
+    )
+    const willLose =
+      next === "video" ? hasImageContent : hasVideoContent
+
+    if (willLose) {
+      const ok = window.confirm(
+        next === "video"
+          ? "Vas a usar video en lugar de imagen. Se descartará la imagen promocional actual. ¿Continuar?"
+          : "Vas a usar imagen en lugar de video. Se descartará el video y su miniatura. ¿Continuar?",
+      )
+      if (!ok) return
+    }
+
+    if (next === "image") {
+      clearVideoSide()
+      setImageRemoved(false)
+    } else {
+      clearImageSide()
+      setVideoRemoved(false)
+      setVideoThumbRemoved(false)
+    }
+    setMediaType(next)
+  }
+
   async function onSubmit(values: FormValues) {
     if (values.end_date <= values.start_date) {
       form.setError("end_date", {
@@ -238,6 +330,40 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
 
     setIsSubmitting(true)
     setImageError(null)
+    setVideoError(null)
+    setVideoThumbError(null)
+
+    const hasExistingVideo =
+      mode === "edit" &&
+      !videoRemoved &&
+      Boolean(initialData?.video_url)
+    const hasExistingThumb =
+      mode === "edit" &&
+      !videoThumbRemoved &&
+      Boolean(initialData?.video_thumbnail_url)
+    const hasExistingImage =
+      mode === "edit" &&
+      !imageRemoved &&
+      Boolean(initialData?.image_url)
+
+    if (mediaType === "video") {
+      if (!selectedVideoFile && !hasExistingVideo) {
+        setVideoError("Sube un video MP4 para este modo.")
+        setIsSubmitting(false)
+        return
+      }
+      if (!selectedVideoThumbFile && !hasExistingThumb) {
+        setVideoThumbError(
+          "Necesitas una miniatura (se genera al subir el video o súbela manualmente).",
+        )
+        setIsSubmitting(false)
+        return
+      }
+    } else if (!selectedImageFile && !hasExistingImage && mode === "create") {
+      setImageError("Sube una imagen promocional.")
+      setIsSubmitting(false)
+      return
+    }
 
     const targeting: Record<string, unknown> = {}
     // Sanitize: drop empty arrays and any value outside the API allow-list
@@ -252,13 +378,14 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
     }
 
     let imageUrl: string | null = null
-    if (mode === "edit" && initialData) {
+    if (mediaType === "image" && mode === "edit" && initialData) {
       if (imageRemoved) {
         imageUrl = null
       } else if (!selectedImageFile) {
         imageUrl = initialData.image_url || null
       }
     }
+    // En modo video el backend sincroniza image_url con la miniatura.
 
     const publicationType =
       mode === "edit" && initialData ? initialData.type : values.type
@@ -276,6 +403,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
       title: values.title,
       description: values.description || null,
       benefit_type: values.benefit_type,
+      media_type: mediaType,
       image_url: imageUrl,
       link: values.link || null,
       coupon_code: values.coupon_code || null,
@@ -300,15 +428,27 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
       business_whatsapp: values.business_whatsapp || null,
       service_price: values.service_price ?? null,
       is_presential: values.is_presential,
+      ...(mediaType === "image" && mode === "edit" ? { clear_video: true } : {}),
+      ...(mediaType === "video" &&
+      mode === "edit" &&
+      videoThumbRemoved &&
+      !selectedVideoThumbFile
+        ? { clear_video_thumbnail: true }
+        : {}),
     }
 
-    const photoToSend = selectedImageFile
+    const photoToSend = mediaType === "image" ? selectedImageFile : null
+    const videoToSend = mediaType === "video" ? selectedVideoFile : null
+    const videoThumbToSend =
+      mediaType === "video" ? selectedVideoThumbFile : null
 
     try {
       if (mode === "create") {
         const created = await api.promotions.create(
           payload as CreatePromotionRequest,
           photoToSend,
+          videoToSend,
+          videoThumbToSend,
         )
         toast({
           title: "Publicación creada",
@@ -322,6 +462,8 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
           initialData.id,
           payload as UpdatePromotionRequest,
           photoToSend,
+          videoToSend,
+          videoThumbToSend,
         )
         toast({
           title: "Publicación actualizada",
@@ -330,13 +472,28 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
       }
       router.push(ROUTES.PROMOTIONS)
     } catch (err) {
-      const isImageError = isPromotionImageError(err, photoToSend != null)
+      const isImageError = isPromotionImageError(
+        err,
+        photoToSend != null || videoThumbToSend != null,
+      )
+      const isVideoError = isPromotionVideoError(err, videoToSend != null)
 
       if (isImageError) {
-        setImageError(
+        const msg =
           err instanceof ApiError
             ? err.message
-            : "La imagen no cumple las políticas de contenido.",
+            : "La imagen no cumple las políticas de contenido."
+        if (videoThumbToSend != null && photoToSend == null) {
+          setVideoThumbError(msg)
+        } else {
+          setImageError(msg)
+        }
+      }
+      if (isVideoError) {
+        setVideoError(
+          err instanceof ApiError
+            ? err.message
+            : "El video no cumple los requisitos.",
         )
       }
 
@@ -346,7 +503,9 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
           err instanceof ApiError
             ? isImageError
               ? err.title || "Imagen no permitida"
-              : err.title || "Error"
+              : isVideoError
+                ? err.title || "Video no válido"
+                : err.title || "Error"
             : "Error",
         description:
           err instanceof ApiError
@@ -503,23 +662,148 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
             )}
           </div>
 
-          <PromotionImageUpload
-            existingImageUrl={
-              imageRemoved ? null : initialData?.image_url || null
-            }
-            file={selectedImageFile}
-            onFileChange={(file) => {
-              setSelectedImageFile(file)
-              setImageRemoved(false)
-              setImageError(null)
-            }}
-            onClearExisting={() => {
-              setImageRemoved(true)
-              setImageError(null)
-            }}
-            error={imageError}
-            disabled={isSubmitting}
-          />
+          <div className="space-y-3">
+            <div>
+              <Label className="text-sm font-medium">Media promocional</Label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Elige <strong>una</strong> opción: imagen o video. No ambos.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => requestMediaTypeChange("image")}
+                className={`flex items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors ${
+                  mediaType === "image"
+                    ? "border-[#4a6b1e] bg-[#4a6b1e]/10 ring-1 ring-[#4a6b1e]/40"
+                    : "border-border hover:bg-muted/40"
+                }`}
+              >
+                <ImageIcon className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  <span className="block text-sm font-medium">
+                    1. Imagen promocional
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Portada para listados y push
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => requestMediaTypeChange("video")}
+                className={`flex items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors ${
+                  mediaType === "video"
+                    ? "border-violet-500 bg-violet-50 ring-1 ring-violet-300"
+                    : "border-border hover:bg-muted/40"
+                }`}
+              >
+                <Film className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  <span className="block text-sm font-medium">
+                    2. Video promocional
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    MP4 corto + miniatura (máx. 15 s)
+                  </span>
+                </span>
+              </button>
+            </div>
+
+            {mediaType === "image" ? (
+              <PromotionImageUpload
+                existingImageUrl={
+                  imageRemoved ? null : initialData?.image_url || null
+                }
+                file={selectedImageFile}
+                onFileChange={(file) => {
+                  setSelectedImageFile(file)
+                  setImageRemoved(false)
+                  setImageError(null)
+                }}
+                onClearExisting={() => {
+                  setImageRemoved(true)
+                  setImageError(null)
+                }}
+                error={imageError}
+                disabled={isSubmitting}
+              />
+            ) : (
+              <>
+                <PromotionVideoUpload
+                  existingVideoUrl={
+                    videoRemoved ? null : initialData?.video_url || null
+                  }
+                  existingDurationSeconds={
+                    videoRemoved
+                      ? null
+                      : initialData?.video_duration_seconds ?? null
+                  }
+                  file={selectedVideoFile}
+                  onFileChange={(next) => {
+                    setSelectedVideoFile(next)
+                    setVideoRemoved(false)
+                    setVideoError(null)
+                  }}
+                  onClearExisting={() => {
+                    setVideoRemoved(true)
+                    setVideoError(null)
+                    setSelectedVideoThumbFile(null)
+                    setVideoThumbRemoved(true)
+                    setVideoThumbFromFrame(false)
+                    setVideoThumbError(null)
+                  }}
+                  onThumbnailCapture={(thumb) => {
+                    setSelectedVideoThumbFile(thumb)
+                    setVideoThumbRemoved(false)
+                    setVideoThumbFromFrame(true)
+                    setVideoThumbError(null)
+                  }}
+                  autoCaptureThumbnail={
+                    !selectedVideoThumbFile &&
+                    (videoThumbRemoved || !initialData?.video_thumbnail_url)
+                  }
+                  error={videoError}
+                  disabled={isSubmitting}
+                />
+
+                <PromotionVideoThumbnailUpload
+                  existingUrl={
+                    videoThumbRemoved
+                      ? null
+                      : initialData?.video_thumbnail_url || null
+                  }
+                  file={selectedVideoThumbFile}
+                  fromVideoFrame={videoThumbFromFrame}
+                  onFileChange={(file) => {
+                    setSelectedVideoThumbFile(file)
+                    setVideoThumbRemoved(false)
+                    setVideoThumbFromFrame(false)
+                    setVideoThumbError(null)
+                  }}
+                  onClearExisting={() => {
+                    setVideoThumbRemoved(true)
+                    setVideoThumbFromFrame(false)
+                    setVideoThumbError(null)
+                  }}
+                  error={videoThumbError}
+                  disabled={isSubmitting}
+                />
+              </>
+            )}
+
+            {mode === "edit" &&
+            initialData?.status === "pending_review" &&
+            mediaType === "video" ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Esta publicación está en revisión. Si cambias el video, un admin
+                debe volver a aprobarla antes de que se muestre en la app.
+              </p>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
 
@@ -965,11 +1249,18 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
       <div className="flex items-center gap-3 pt-2">
         <Button type="submit" disabled={isSubmitting} className="min-w-[140px] bg-[#4a6b1e] hover:bg-[#3d5a18] text-white">
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {mode === "create" ? "Crear publicación" : "Guardar cambios"}
+          {isSubmitting
+            ? mediaType === "video" && selectedVideoFile
+              ? "Subiendo video…"
+              : "Guardando…"
+            : mode === "create"
+              ? "Crear publicación"
+              : "Guardar cambios"}
         </Button>
         <Button
           type="button"
           variant="outline"
+          disabled={isSubmitting}
           onClick={() => router.push(ROUTES.PROMOTIONS)}
         >
           Cancelar

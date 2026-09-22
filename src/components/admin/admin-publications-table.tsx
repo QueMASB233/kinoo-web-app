@@ -26,6 +26,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AdminNotifyZoneButton } from "./admin-notify-zone-button"
 import { AdminSuspensionToggle } from "./admin-suspension-toggle"
+import { AdminPublicationMediaButton } from "./admin-publication-media-button"
 import type { Promotion, PromotionType } from "@/types"
 
 type FilterTab = "all" | "active" | "suspended" | "rejected"
@@ -209,6 +210,7 @@ export function AdminPublicationsTable({
             <TableHeader>
               <TableRow className="bg-gray-50 hover:bg-gray-50">
                 <TableHead className="text-xs font-medium">Título</TableHead>
+                <TableHead className="text-xs font-medium">Media</TableHead>
                 <TableHead className="text-xs font-medium">Tipo</TableHead>
                 <TableHead className="text-xs font-medium">Beneficio</TableHead>
                 <TableHead className="text-xs font-medium">Estado</TableHead>
@@ -230,6 +232,9 @@ export function AdminPublicationsTable({
                     <span className="truncate block" title={promo.title}>
                       {promo.title}
                     </span>
+                  </TableCell>
+                  <TableCell className="w-[72px]">
+                    <AdminPublicationMediaButton promotion={promo} />
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="text-xs font-normal">

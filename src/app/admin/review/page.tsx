@@ -8,12 +8,12 @@ import { ApiError } from "@/lib/api-client"
 import { BENEFIT_TYPE_LABELS, PROMOTION_TYPE_LABELS } from "@/lib/constants"
 import { useAdminBadges } from "@/providers/admin-provider"
 import { AdminReviewLocationsMap } from "@/components/admin/admin-review-locations-map"
+import { AdminPromotionMediaPanel } from "@/components/admin/admin-promotion-media-panel"
 import {
   CheckCircle,
   XCircle,
   Loader2,
   ExternalLink,
-  ImageIcon,
   Search,
   RotateCcw,
   MapPin,
@@ -238,21 +238,19 @@ function ReviewCard({
   return (
     <div className="rounded-lg border border-[#e5e7eb] bg-white">
       <div className="flex flex-col lg:flex-row">
-        <div className="flex-1 p-5 space-y-3">
-          <div className="flex items-start gap-4">
-            {promo.image_url ? (
-              <img
-                src={promo.image_url}
-                alt=""
-                className="h-20 w-20 shrink-0 rounded-lg border border-gray-200 object-cover"
-              />
-            ) : (
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-50">
-                <ImageIcon className="h-8 w-8 text-gray-300" />
-              </div>
-            )}
+        <div className="flex-1 p-5 space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <AdminPromotionMediaPanel
+              imageUrl={promo.image_url}
+              videoUrl={promo.video_url}
+              videoThumbnailUrl={promo.video_thumbnail_url}
+              videoDurationSeconds={promo.video_duration_seconds}
+              videoBytes={promo.video_bytes}
+              mediaType={promo.media_type}
+              className="sm:max-w-[280px]"
+            />
 
-            <div className="min-w-0 flex-1 space-y-1">
+            <div className="min-w-0 flex-1 space-y-1.5">
               <div className="flex items-center gap-2 flex-wrap">
                 <span
                   className={`rounded px-2 py-0.5 text-xs font-medium ${
@@ -268,7 +266,7 @@ function ReviewCard({
                     promo.benefit_type}
                 </span>
               </div>
-              <h3 className="text-lg font-semibold text-[#111827]">
+              <h3 className="text-lg font-semibold text-[#111827] leading-snug">
                 {promo.title}
               </h3>
               {promo.description && (

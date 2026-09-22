@@ -83,6 +83,13 @@ export interface Promotion {
   description: string | null
   benefit_type: BenefitType
   image_url: string | null
+  /** Modo exclusivo: image | video. Default image. */
+  media_type?: "image" | "video"
+  video_url?: string | null
+  video_duration_seconds?: number | null
+  video_bytes?: number | null
+  video_mime?: string | null
+  video_thumbnail_url?: string | null
   link: string | null
   coupon_code: string | null
   redeem_message: string
@@ -140,6 +147,8 @@ export interface CreatePromotionRequest {
   description?: string | null
   benefit_type: BenefitType
   image_url?: string | null
+  /** image | video — exclusivo (XOR). Default image. */
+  media_type?: "image" | "video"
   link?: string | null
   coupon_code?: string | null
   redeem_message?: string | null
@@ -172,6 +181,12 @@ export interface UpdatePromotionRequest {
   description?: string | null
   benefit_type?: BenefitType | null
   image_url?: string | null
+  /** image | video — exclusivo (XOR). */
+  media_type?: "image" | "video" | null
+  /** Quita el video existente (solo update). No enviar video_* arbitrarios. */
+  clear_video?: boolean
+  /** Quita solo la miniatura del video (independiente de image_url). */
+  clear_video_thumbnail?: boolean
   link?: string | null
   coupon_code?: string | null
   redeem_message?: string | null

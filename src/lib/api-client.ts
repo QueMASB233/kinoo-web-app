@@ -1,5 +1,6 @@
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "./auth"
 import { API_BASE_URL, ROUTES } from "./constants"
+import { PROMOTION_VIDEO_UPLOAD_TIMEOUT_MS } from "./promotion-video"
 import type { TokenResponse } from "@/types"
 
 export class ApiError extends Error {
@@ -88,19 +89,19 @@ export async function apiClient<T>(
     headers["Authorization"] = `Bearer ${token}`
   }
 
-  let res = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  })
+  const doFetch = async (authHeaders: Record<string, string>) =>
+    fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers: authHeaders,
+    })
+
+  let res = await doFetch(headers)
 
   if (res.status === 401) {
     const newToken = await refreshAccessToken()
     if (newToken) {
       headers["Authorization"] = `Bearer ${newToken}`
-      res = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
-        headers,
-      })
+      res = await doFetch(headers)
     } else {
       clearTokens()
       if (typeof window !== "undefined") {
@@ -119,6 +120,49 @@ export async function apiClient<T>(
   if (res.status === 204) return undefined as T
 
   return res.json()
+}
+
+/** Fetch con timeout vía AbortController (p. ej. subida de video). */
+async function apiClientWithTimeout<T>(
+  endpoint: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<T> {
+  const controller = new AbortController()
+  const external = options.signal
+  const onExternalAbort = () => controller.abort()
+  if (external) {
+    if (external.aborted) {
+      controller.abort()
+    } else {
+      external.addEventListener("abort", onExternalAbort, { once: true })
+    }
+  }
+
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await apiClient<T>(endpoint, {
+      ...options,
+      signal: controller.signal,
+    })
+  } catch (err) {
+    if (
+      err instanceof DOMException &&
+      err.name === "AbortError"
+    ) {
+      throw new ApiError(
+        408,
+        "La subida tardó demasiado. Prueba con un video más liviano o mejor conexión.",
+        "Tiempo de espera",
+      )
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+    if (external) {
+      external.removeEventListener("abort", onExternalAbort)
+    }
+  }
 }
 
 // ─── API Methods ─────────────────────────────────────────
@@ -156,27 +200,54 @@ export const api = {
     create: (
       data: import("@/types").CreatePromotionRequest,
       photo?: File | null,
+      video?: File | null,
+      videoThumbnail?: File | null,
     ) => {
       const form = new FormData()
       form.append("data", JSON.stringify(data))
       if (photo) form.append("photo", photo)
-      return apiClient<import("@/types").Promotion>("/admin/promotions", {
-        method: "POST",
+      if (video) form.append("video", video)
+      if (videoThumbnail) form.append("video_thumbnail", videoThumbnail)
+      const request = {
+        method: "POST" as const,
         body: form,
-      })
+      }
+      if (video) {
+        return apiClientWithTimeout<import("@/types").Promotion>(
+          "/admin/promotions",
+          request,
+          PROMOTION_VIDEO_UPLOAD_TIMEOUT_MS,
+        )
+      }
+      return apiClient<import("@/types").Promotion>("/admin/promotions", request)
     },
     update: (
       id: string,
       data: import("@/types").UpdatePromotionRequest,
       photo?: File | null,
+      video?: File | null,
+      videoThumbnail?: File | null,
     ) => {
       const form = new FormData()
       form.append("data", JSON.stringify(data))
       if (photo) form.append("photo", photo)
-      return apiClient<import("@/types").Promotion>(`/admin/promotions/${id}`, {
-        method: "PUT",
+      if (video) form.append("video", video)
+      if (videoThumbnail) form.append("video_thumbnail", videoThumbnail)
+      const request = {
+        method: "PUT" as const,
         body: form,
-      })
+      }
+      if (video) {
+        return apiClientWithTimeout<import("@/types").Promotion>(
+          `/admin/promotions/${id}`,
+          request,
+          PROMOTION_VIDEO_UPLOAD_TIMEOUT_MS,
+        )
+      }
+      return apiClient<import("@/types").Promotion>(
+        `/admin/promotions/${id}`,
+        request,
+      )
     },
     patch: (id: string, data: import("@/types").UpdatePromotionRequest) =>
       apiClient<import("@/types").Promotion>(`/admin/promotions/${id}`, {
