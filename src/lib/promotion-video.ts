@@ -1,11 +1,21 @@
 /** Límites de video de publicaciones — alineados al backend / bucket promo-videos. */
 
-export const PROMOTION_VIDEO_MAX_BYTES = 20 * 1024 * 1024
-export const PROMOTION_VIDEO_MAX_DURATION_SECONDS = 15
+/** Tope del archivo que se sube (ya optimizado). Igual al bucket y al backend. */
+export const PROMOTION_VIDEO_MAX_BYTES = 50 * 1024 * 1024
+export const PROMOTION_VIDEO_MAX_DURATION_SECONDS = 30
 /** Margen por redondeo del encoder (igual que backend). */
-export const PROMOTION_VIDEO_DURATION_TOLERANCE_SECONDS = 0.5
+export const PROMOTION_VIDEO_DURATION_TOLERANCE_SECONDS = 1
 export const PROMOTION_VIDEO_ALLOWED_MIME = "video/mp4" as const
-export const PROMOTION_VIDEO_UPLOAD_TIMEOUT_MS = 180_000
+/** Sin optimizar pueden viajar hasta 50 MB; en redes lentas eso pasa de 3 min. */
+export const PROMOTION_VIDEO_UPLOAD_TIMEOUT_MS = 300_000
+
+/** Tope del archivo original que el proveedor elige (se comprime en el navegador). */
+export const PROMOTION_VIDEO_SOURCE_MAX_BYTES = 1024 * 1024 * 1024
+export const PROMOTION_VIDEO_SOURCE_ACCEPT = "video/mp4,.mp4"
+export const PROMOTION_VIDEO_ONLY_MP4_MESSAGE = "Solo se permiten videos en formato MP4."
+
+export const PROMOTION_VIDEO_MAX_ALLOWED_SECONDS =
+  PROMOTION_VIDEO_MAX_DURATION_SECONDS + PROMOTION_VIDEO_DURATION_TOLERANCE_SECONDS
 
 export function formatVideoDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "—"
@@ -19,8 +29,14 @@ export function formatFileSizeMb(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+export function isMp4File(file: File): boolean {
+  const mime = (file.type || "").toLowerCase()
+  if (mime === PROMOTION_VIDEO_ALLOWED_MIME || mime === "application/mp4") return true
+  return !mime && file.name.toLowerCase().endsWith(".mp4")
+}
+
 /**
- * Lee la duración del MP4 en el navegador (metadata).
+ * Lee la duración del video en el navegador (metadata).
  */
 export function readVideoDurationSeconds(file: File): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -55,21 +71,20 @@ export function readVideoDurationSeconds(file: File): Promise<number> {
   })
 }
 
+/**
+ * Valida un archivo listo para subir sin optimizar (fallback cuando el navegador
+ * no puede comprimir): MP4, ≤ 50 MB, ≤ 30 s.
+ */
 export async function validatePromotionVideoFile(
   file: File,
 ): Promise<{ durationSeconds: number }> {
-  const mime = (file.type || "").toLowerCase()
-  if (mime && mime !== PROMOTION_VIDEO_ALLOWED_MIME && mime !== "application/mp4") {
-    throw new Error("Usa un video MP4 (H.264).")
-  }
-  // Algunos sistemas dejan type vacío; igual intentamos leer metadata.
-  if (!mime && !file.name.toLowerCase().endsWith(".mp4")) {
-    throw new Error("Usa un video MP4 (H.264).")
+  if (!isMp4File(file)) {
+    throw new Error(PROMOTION_VIDEO_ONLY_MP4_MESSAGE)
   }
 
   if (file.size > PROMOTION_VIDEO_MAX_BYTES) {
     throw new Error(
-      `El video no puede superar ${PROMOTION_VIDEO_MAX_BYTES / (1024 * 1024)} MB.`,
+      `Tu navegador no puede optimizar este video y pesa ${formatFileSizeMb(file.size)} (máx. ${PROMOTION_VIDEO_MAX_BYTES / (1024 * 1024)} MB sin optimizar). Prueba desde Chrome, Edge o Safari actualizados.`,
     )
   }
 
@@ -78,11 +93,7 @@ export async function validatePromotionVideoFile(
   }
 
   const durationSeconds = await readVideoDurationSeconds(file)
-  const maxAllowed =
-    PROMOTION_VIDEO_MAX_DURATION_SECONDS +
-    PROMOTION_VIDEO_DURATION_TOLERANCE_SECONDS
-
-  if (durationSeconds > maxAllowed) {
+  if (durationSeconds > PROMOTION_VIDEO_MAX_ALLOWED_SECONDS) {
     throw new Error(
       `El video no puede durar más de ${PROMOTION_VIDEO_MAX_DURATION_SECONDS} segundos (detectado: ${durationSeconds.toFixed(1)} s).`,
     )

@@ -1,4 +1,10 @@
-import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "./auth"
+import {
+  getAccessToken,
+  getAccessTokenExpiryMs,
+  getRefreshToken,
+  setTokens,
+  clearTokens,
+} from "./auth"
 import { API_BASE_URL, ROUTES } from "./constants"
 import { PROMOTION_VIDEO_UPLOAD_TIMEOUT_MS } from "./promotion-video"
 import type { TokenResponse } from "@/types"
@@ -122,47 +128,126 @@ export async function apiClient<T>(
   return res.json()
 }
 
-/** Fetch con timeout vía AbortController (p. ej. subida de video). */
-async function apiClientWithTimeout<T>(
-  endpoint: string,
-  options: RequestInit,
-  timeoutMs: number,
-): Promise<T> {
-  const controller = new AbortController()
-  const external = options.signal
-  const onExternalAbort = () => controller.abort()
-  if (external) {
-    if (external.aborted) {
-      controller.abort()
-    } else {
-      external.addEventListener("abort", onExternalAbort, { once: true })
-    }
-  }
+/**
+ * Refresca el access token si vence pronto. El backend lee el multipart completo
+ * antes de validar el token: un 401 tras subir un video obliga a re-subirlo entero.
+ */
+export async function ensureFreshAccessToken(minValidityMs = 5 * 60_000): Promise<void> {
+  const expiresAt = getAccessTokenExpiryMs()
+  if (expiresAt == null || expiresAt - Date.now() > minValidityMs) return
+  await refreshAccessToken()
+}
 
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await apiClient<T>(endpoint, {
-      ...options,
-      signal: controller.signal,
-    })
-  } catch (err) {
-    if (
-      err instanceof DOMException &&
-      err.name === "AbortError"
-    ) {
-      throw new ApiError(
-        408,
-        "La subida tardó demasiado. Prueba con un video más liviano o mejor conexión.",
-        "Tiempo de espera",
+export interface UploadOptions {
+  /** Fracción 0–1 de bytes enviados al servidor. */
+  onUploadProgress?: (fraction: number) => void
+  signal?: AbortSignal
+  timeoutMs?: number
+}
+
+function sendMultipartWithProgress(
+  endpoint: string,
+  method: "POST" | "PUT",
+  form: FormData,
+  token: string | null,
+  options: UploadOptions,
+): Promise<{ status: number; body: unknown }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open(method, `${API_BASE_URL}${endpoint}`)
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`)
+    if (options.timeoutMs) xhr.timeout = options.timeoutMs
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) {
+        options.onUploadProgress?.(e.loaded / e.total)
+      }
+    }
+
+    const onAbort = () => xhr.abort()
+    options.signal?.addEventListener("abort", onAbort, { once: true })
+    const cleanup = () => options.signal?.removeEventListener("abort", onAbort)
+
+    xhr.onload = () => {
+      cleanup()
+      let body: unknown = {}
+      try {
+        body = xhr.responseText ? JSON.parse(xhr.responseText) : {}
+      } catch {
+        body = {}
+      }
+      resolve({ status: xhr.status, body })
+    }
+    xhr.ontimeout = () => {
+      cleanup()
+      reject(
+        new ApiError(
+          408,
+          "La subida tardó demasiado. Revisa tu conexión e inténtalo de nuevo.",
+          "Tiempo de espera",
+        ),
       )
     }
-    throw err
-  } finally {
-    clearTimeout(timer)
-    if (external) {
-      external.removeEventListener("abort", onExternalAbort)
+    xhr.onabort = () => {
+      cleanup()
+      reject(new ApiError(499, "Subida cancelada.", "Subida cancelada"))
     }
+    xhr.onerror = () => {
+      cleanup()
+      reject(
+        new ApiError(
+          0,
+          "Se perdió la conexión durante la subida. Inténtalo de nuevo.",
+          "Error de conexión",
+        ),
+      )
+    }
+
+    if (options.signal?.aborted) {
+      xhr.abort()
+      return
+    }
+    xhr.send(form)
+  })
+}
+
+/** Multipart con progreso de subida (XHR); `fetch` no expone progreso de upload. */
+async function apiUploadWithProgress<T>(
+  endpoint: string,
+  method: "POST" | "PUT",
+  form: FormData,
+  options: UploadOptions = {},
+): Promise<T> {
+  await ensureFreshAccessToken()
+
+  let res = await sendMultipartWithProgress(
+    endpoint,
+    method,
+    form,
+    getAccessToken(),
+    options,
+  )
+
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken()
+    if (!newToken) {
+      clearTokens()
+      if (typeof window !== "undefined") {
+        window.location.href = ROUTES.LOGIN
+      }
+      throw new ApiError(401, "Sesión expirada")
+    }
+    options.onUploadProgress?.(0)
+    res = await sendMultipartWithProgress(endpoint, method, form, newToken, options)
   }
+
+  if (res.status < 200 || res.status >= 300) {
+    const detail = (res.body as { detail?: unknown } | null)?.detail
+    const parsed = parseApiErrorDetail(detail)
+    throw new ApiError(res.status, parsed.message, parsed.title)
+  }
+
+  return res.body as T
 }
 
 // ─── API Methods ─────────────────────────────────────────
@@ -202,24 +287,25 @@ export const api = {
       photo?: File | null,
       video?: File | null,
       videoThumbnail?: File | null,
+      uploadOptions?: UploadOptions,
     ) => {
       const form = new FormData()
       form.append("data", JSON.stringify(data))
       if (photo) form.append("photo", photo)
       if (video) form.append("video", video)
       if (videoThumbnail) form.append("video_thumbnail", videoThumbnail)
-      const request = {
-        method: "POST" as const,
-        body: form,
-      }
       if (video) {
-        return apiClientWithTimeout<import("@/types").Promotion>(
+        return apiUploadWithProgress<import("@/types").Promotion>(
           "/admin/promotions",
-          request,
-          PROMOTION_VIDEO_UPLOAD_TIMEOUT_MS,
+          "POST",
+          form,
+          { timeoutMs: PROMOTION_VIDEO_UPLOAD_TIMEOUT_MS, ...uploadOptions },
         )
       }
-      return apiClient<import("@/types").Promotion>("/admin/promotions", request)
+      return apiClient<import("@/types").Promotion>("/admin/promotions", {
+        method: "POST",
+        body: form,
+      })
     },
     update: (
       id: string,
@@ -227,27 +313,25 @@ export const api = {
       photo?: File | null,
       video?: File | null,
       videoThumbnail?: File | null,
+      uploadOptions?: UploadOptions,
     ) => {
       const form = new FormData()
       form.append("data", JSON.stringify(data))
       if (photo) form.append("photo", photo)
       if (video) form.append("video", video)
       if (videoThumbnail) form.append("video_thumbnail", videoThumbnail)
-      const request = {
-        method: "PUT" as const,
-        body: form,
-      }
       if (video) {
-        return apiClientWithTimeout<import("@/types").Promotion>(
+        return apiUploadWithProgress<import("@/types").Promotion>(
           `/admin/promotions/${id}`,
-          request,
-          PROMOTION_VIDEO_UPLOAD_TIMEOUT_MS,
+          "PUT",
+          form,
+          { timeoutMs: PROMOTION_VIDEO_UPLOAD_TIMEOUT_MS, ...uploadOptions },
         )
       }
-      return apiClient<import("@/types").Promotion>(
-        `/admin/promotions/${id}`,
-        request,
-      )
+      return apiClient<import("@/types").Promotion>(`/admin/promotions/${id}`, {
+        method: "PUT",
+        body: form,
+      })
     },
     patch: (id: string, data: import("@/types").UpdatePromotionRequest) =>
       apiClient<import("@/types").Promotion>(`/admin/promotions/${id}`, {

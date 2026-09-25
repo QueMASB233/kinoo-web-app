@@ -53,6 +53,7 @@ import {
 import { LocationPicker } from "./location-picker"
 import { PromotionImageUpload } from "./promotion-image-upload"
 import { PromotionVideoUpload } from "./promotion-video-upload"
+import { PROMOTION_VIDEO_MAX_DURATION_SECONDS } from "@/lib/promotion-video"
 import { PromotionVideoThumbnailUpload } from "./promotion-video-thumbnail-upload"
 import { Loader2, ArrowLeft, Info, MapPin, ImageIcon, Film } from "lucide-react"
 import type {
@@ -144,6 +145,7 @@ const VIDEO_UPLOAD_ERROR_TITLES = new Set([
   "Error al subir",
   "Tiempo de espera",
   "Servicio no disponible",
+  "Error de conexión",
 ])
 
 function isPromotionImageError(err: unknown, sentPhoto: boolean): boolean {
@@ -178,6 +180,10 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
   const [videoThumbRemoved, setVideoThumbRemoved] = useState(false)
   const [videoThumbFromFrame, setVideoThumbFromFrame] = useState(false)
   const [videoThumbError, setVideoThumbError] = useState<string | null>(null)
+  const [videoBusy, setVideoBusy] = useState(false)
+  const [videoUploadProgress, setVideoUploadProgress] = useState<number | null>(
+    null,
+  )
   const [mediaType, setMediaType] = useState<PromotionMediaType>(() =>
     resolveInitialMediaType(initialData),
   )
@@ -348,7 +354,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
 
     if (mediaType === "video") {
       if (!selectedVideoFile && !hasExistingVideo) {
-        setVideoError("Sube un video MP4 para este modo.")
+        setVideoError("Sube un video para este modo.")
         setIsSubmitting(false)
         return
       }
@@ -441,6 +447,10 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
     const videoToSend = mediaType === "video" ? selectedVideoFile : null
     const videoThumbToSend =
       mediaType === "video" ? selectedVideoThumbFile : null
+    const uploadOptions = videoToSend
+      ? { onUploadProgress: (p: number) => setVideoUploadProgress(p) }
+      : undefined
+    if (videoToSend) setVideoUploadProgress(0)
 
     try {
       if (mode === "create") {
@@ -449,6 +459,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
           photoToSend,
           videoToSend,
           videoThumbToSend,
+          uploadOptions,
         )
         toast({
           title: "Publicación creada",
@@ -464,6 +475,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
           photoToSend,
           videoToSend,
           videoThumbToSend,
+          uploadOptions,
         )
         toast({
           title: "Publicación actualizada",
@@ -514,8 +526,18 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
       })
     } finally {
       setIsSubmitting(false)
+      setVideoUploadProgress(null)
     }
   }
+
+  const submitLabel = (() => {
+    if (!isSubmitting) {
+      return mode === "create" ? "Crear publicación" : "Guardar cambios"
+    }
+    if (videoUploadProgress == null) return "Guardando…"
+    if (videoUploadProgress >= 1) return "Procesando video…"
+    return `Subiendo video… ${Math.round(videoUploadProgress * 100)}%`
+  })()
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 max-w-3xl">
@@ -707,7 +729,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
                     2. Video promocional
                   </span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">
-                    MP4 corto + miniatura (máx. 15 s)
+                    Video MP4 + miniatura (máx. {PROMOTION_VIDEO_MAX_DURATION_SECONDS} s)
                   </span>
                 </span>
               </button>
@@ -766,6 +788,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
                     !selectedVideoThumbFile &&
                     (videoThumbRemoved || !initialData?.video_thumbnail_url)
                   }
+                  onBusyChange={setVideoBusy}
                   error={videoError}
                   disabled={isSubmitting}
                 />
@@ -1247,15 +1270,13 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
 
       {/* Submit */}
       <div className="flex items-center gap-3 pt-2">
-        <Button type="submit" disabled={isSubmitting} className="min-w-[140px] bg-[#4a6b1e] hover:bg-[#3d5a18] text-white">
+        <Button
+          type="submit"
+          disabled={isSubmitting || (mediaType === "video" && videoBusy)}
+          className="min-w-[140px] bg-[#4a6b1e] hover:bg-[#3d5a18] text-white"
+        >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isSubmitting
-            ? mediaType === "video" && selectedVideoFile
-              ? "Subiendo video…"
-              : "Guardando…"
-            : mode === "create"
-              ? "Crear publicación"
-              : "Guardar cambios"}
+          {submitLabel}
         </Button>
         <Button
           type="button"
