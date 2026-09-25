@@ -28,7 +28,9 @@ import type {
 } from "@/types"
 import { ROUTES } from "@/lib/constants"
 import {
+  CITY_COVERAGE_LABEL,
   CITY_COVERAGE_RADIUS_M,
+  POINT_COVERAGE_LABEL,
   POINT_COVERAGE_RADIUS_M,
 } from "@/lib/geo-coverage"
 
@@ -548,9 +550,9 @@ export function LocationPicker({ promotionId, promotionType }: LocationPickerPro
                 : "border-border hover:border-muted-foreground/30"
             }`}
           >
-            <p className="text-sm font-medium">Punto exacto (1 km)</p>
+            <p className="text-sm font-medium">Punto exacto ({POINT_COVERAGE_LABEL})</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Radio de 1 km
+              Radio de {POINT_COVERAGE_LABEL}
               {chargesCredits && pricing != null && (
                 <> · {Number(pricing.point_credits)} créditos</>
               )}
@@ -566,9 +568,9 @@ export function LocationPicker({ promotionId, promotionType }: LocationPickerPro
                 : "border-border hover:border-muted-foreground/30"
             }`}
           >
-            <p className="text-sm font-medium">Toda la ciudad (25 km)</p>
+            <p className="text-sm font-medium">Toda la ciudad ({CITY_COVERAGE_LABEL})</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Radio de 25 km
+              Radio de {CITY_COVERAGE_LABEL}
               {chargesCredits && pricing != null && (
                 <> · {Number(pricing.city_credits)} créditos</>
               )}
@@ -695,8 +697,8 @@ export function LocationPicker({ promotionId, promotionType }: LocationPickerPro
                 Cobertura:{" "}
                 <span className="font-medium text-foreground">
                   {coverageType === "city"
-                    ? "Toda la ciudad (25 km)"
-                    : "Punto exacto (1 km)"}
+                    ? `Toda la ciudad (${CITY_COVERAGE_LABEL})`
+                    : `Punto exacto (${POINT_COVERAGE_LABEL})`}
                 </span>
               </p>
             </div>
@@ -767,7 +769,9 @@ export function LocationPicker({ promotionId, promotionType }: LocationPickerPro
                             : "bg-[#FF6B35]/15 text-[#FF6B35]"
                         }`}
                       >
-                        {isCity ? "Ciudad (25 km)" : "Punto (1 km)"}
+                        {isCity
+                          ? `Ciudad (${CITY_COVERAGE_LABEL})`
+                          : `Punto (${POINT_COVERAGE_LABEL})`}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground truncate">

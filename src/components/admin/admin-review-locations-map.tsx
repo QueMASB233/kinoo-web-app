@@ -10,7 +10,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
+  CITY_COVERAGE_LABEL,
   CITY_COVERAGE_RADIUS_M,
+  POINT_COVERAGE_LABEL,
   POINT_COVERAGE_RADIUS_M,
 } from "@/lib/geo-coverage"
 import { MapPin, Loader2 } from "lucide-react"
@@ -226,7 +228,9 @@ export function AdminReviewLocationsMap({
                           : "bg-[#FF6B35]/15 text-[#FF6B35]"
                       }`}
                     >
-                      {isCity ? "Ciudad (25 km)" : "Punto (1 km)"}
+                      {isCity
+                        ? `Ciudad (${CITY_COVERAGE_LABEL})`
+                        : `Punto (${POINT_COVERAGE_LABEL})`}
                     </span>
                   </li>
                 )

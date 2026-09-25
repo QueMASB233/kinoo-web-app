@@ -6,6 +6,7 @@ import { es } from "date-fns/locale"
 import { adminApi } from "@/lib/admin-api"
 import { ApiError } from "@/lib/api-client"
 import { BENEFIT_TYPE_LABELS, PROMOTION_TYPE_LABELS } from "@/lib/constants"
+import { CITY_COVERAGE_LABEL, POINT_COVERAGE_LABEL } from "@/lib/geo-coverage"
 import { useAdminBadges } from "@/providers/admin-provider"
 import { AdminReviewLocationsMap } from "@/components/admin/admin-review-locations-map"
 import { AdminPromotionMediaPanel } from "@/components/admin/admin-promotion-media-panel"
@@ -340,7 +341,9 @@ function ReviewCard({
                             "Sin dirección"}
                         </span>
                         <span className="shrink-0 text-[10px] text-gray-400">
-                          {loc.coverage_type === "city" ? "25 km" : "1 km"}
+                          {loc.coverage_type === "city"
+                            ? CITY_COVERAGE_LABEL
+                            : POINT_COVERAGE_LABEL}
                         </span>
                       </li>
                     ))}
