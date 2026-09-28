@@ -75,6 +75,12 @@ export interface PromotionNotifyUsersResponse {
 
 // ─── Promotion ───────────────────────────────────────────
 
+/** provider = publicación de proveedor; kynoo = creada por admin (sin créditos). */
+export type PromotionPublisherType = "provider" | "kynoo"
+
+/** all = reglas normales (zona + segmentación); list = solo usuarios del CSV. */
+export type PromotionAudienceMode = "all" | "list"
+
 export interface Promotion {
   id: string
   provider_id: string | null
@@ -124,6 +130,10 @@ export interface Promotion {
   users_notified_at?: string | null
   /** Usuarios del último blast. null si nunca se disparó. */
   users_notified_count?: number | null
+  publisher_type?: PromotionPublisherType
+  audience_mode?: PromotionAudienceMode
+  /** Miembros de la lista; solo presente en modo `list`. */
+  audience_count?: number | null
   created_at: string
   updated_at: string
   redemptions_count: number
@@ -138,6 +148,84 @@ export interface PromotionNotificationAudience {
   eligible_count: number
   users_notified_at: string | null
   users_notified_count: number | null
+  audience_mode?: PromotionAudienceMode
+  /** Solo en modo lista: miembros totales (con o sin push). */
+  audience_member_count?: number | null
+}
+
+// ─── Audiencia por lista (CSV, solo admin) ───────────────
+
+export type AudienceImportMode = "replace" | "append"
+
+export interface AudienceImportErrorItem {
+  row: number
+  value: string
+  /** vacio | uuid_invalido | no_encontrado | usuario_eliminado | rol_no_permitido */
+  reason: string
+}
+
+export interface AudienceImportReport {
+  dry_run: boolean
+  mode: AudienceImportMode
+  import_id: string | null
+  total_rows: number
+  valid_count: number
+  invalid_count: number
+  not_found_count: number
+  ineligible_count: number
+  duplicate_count: number
+  inserted_count: number
+  removed_count: number
+  audience_total: number
+  with_push_count: number
+  errors_sample: AudienceImportErrorItem[]
+}
+
+export interface AudienceMember {
+  user_id: string
+  full_name: string | null
+  email: string | null
+  source: string
+  created_at: string
+}
+
+export interface AudienceList {
+  promotion_id: string
+  audience_mode: PromotionAudienceMode
+  total: number
+  with_push_count: number
+  page: number
+  limit: number
+  items: AudienceMember[]
+}
+
+export interface AudienceImportHistoryItem {
+  id: string
+  uploaded_by_user_id: string | null
+  uploaded_by_name: string | null
+  file_name: string | null
+  mode: AudienceImportMode
+  total_rows: number
+  valid_count: number
+  invalid_count: number
+  not_found_count: number
+  ineligible_count: number
+  duplicate_count: number
+  inserted_count: number
+  removed_count: number
+  errors_sample: AudienceImportErrorItem[]
+  created_at: string
+}
+
+export interface PromotionAudienceModeResponse {
+  promotion_id: string
+  audience_mode: PromotionAudienceMode
+  audience_count: number
+}
+
+export interface AudienceClearResponse {
+  promotion_id: string
+  removed_count: number
 }
 
 export interface CreatePromotionRequest {
@@ -173,6 +261,8 @@ export interface CreatePromotionRequest {
   end_date: string
   is_active?: boolean
   status?: PromotionStatus
+  /** Solo admin (publicación KYNOO). El backend lo ignora para proveedores. */
+  audience_mode?: PromotionAudienceMode
 }
 
 export interface UpdatePromotionRequest {

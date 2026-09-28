@@ -11,6 +11,8 @@ import {
   BENEFIT_TYPES_BY_PUBLICATION_TYPE,
   isBenefitAllowedForPublication,
   KYNOO_POINTS_BRAND,
+  KYNOO_PUBLISHER_NAME,
+  PROMOTION_AUDIENCE_MODE_LABELS,
   ROUTES,
 } from "@/lib/constants"
 import { useToast } from "@/hooks/use-toast"
@@ -51,6 +53,7 @@ import {
   sanitizeUserFilters,
 } from "./user-targeting-section"
 import { LocationPicker } from "./location-picker"
+import { PromotionAudienceManager } from "@/components/admin/promotion-audience-manager"
 import { PromotionImageUpload } from "./promotion-image-upload"
 import { PromotionVideoUpload } from "./promotion-video-upload"
 import { PROMOTION_VIDEO_MAX_DURATION_SECONDS } from "@/lib/promotion-video"
@@ -58,6 +61,7 @@ import { PromotionVideoThumbnailUpload } from "./promotion-video-thumbnail-uploa
 import { Loader2, ArrowLeft, Info, MapPin, ImageIcon, Film } from "lucide-react"
 import type {
   Promotion,
+  PromotionAudienceMode,
   PromotionType,
   BenefitType,
   CreatePromotionRequest,
@@ -163,11 +167,23 @@ function isPromotionVideoError(err: unknown, sentVideo: boolean): boolean {
 interface PromotionFormProps {
   initialData?: Promotion
   mode: "create" | "edit"
+  /** admin = publicación KYNOO: se publica sin revisión y sin créditos. */
+  context?: "provider" | "admin"
 }
 
-export function PromotionForm({ initialData, mode }: PromotionFormProps) {
+export function PromotionForm({
+  initialData,
+  mode,
+  context = "provider",
+}: PromotionFormProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const isAdmin = context === "admin"
+  const listRoute = isAdmin ? ROUTES.ADMIN_PUBLICATIONS : ROUTES.PROMOTIONS
+  const editRoute = isAdmin ? ROUTES.ADMIN_EDIT_PUBLICATION : ROUTES.EDIT_PROMOTION
+  const [audienceMode, setAudienceMode] = useState<PromotionAudienceMode>(
+    () => initialData?.audience_mode ?? "all",
+  )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
   const [imageRemoved, setImageRemoved] = useState(false)
@@ -246,7 +262,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
           end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           is_active: true,
           is_featured_eligible: false,
-          business_name: "",
+          business_name: isAdmin ? KYNOO_PUBLISHER_NAME : "",
           business_address: "",
           business_phone: "",
           business_email: "",
@@ -434,6 +450,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
       business_whatsapp: values.business_whatsapp || null,
       service_price: values.service_price ?? null,
       is_presential: values.is_presential,
+      ...(isAdmin && mode === "create" ? { audience_mode: audienceMode } : {}),
       ...(mediaType === "image" && mode === "edit" ? { clear_video: true } : {}),
       ...(mediaType === "video" &&
       mode === "edit" &&
@@ -462,11 +479,14 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
           uploadOptions,
         )
         toast({
-          title: "Publicación creada",
-          description:
-            "Ahora agrega las ubicaciones. Cuando el admin apruebe, se avisará a los usuarios de esa zona. Ten todos los puntos listos.",
+          title: isAdmin ? "Publicación KYNOO publicada" : "Publicación creada",
+          description: !isAdmin
+            ? "Ahora agrega las ubicaciones. Cuando el admin apruebe, se avisará a los usuarios de esa zona. Ten todos los puntos listos."
+            : audienceMode === "list"
+              ? "Ya está activa, pero nadie la verá hasta que cargues la lista de usuarios."
+              : "Ya está activa. Agrega las ubicaciones para que los usuarios de esa zona la vean.",
         })
-        router.push(ROUTES.EDIT_PROMOTION(created.id))
+        router.push(editRoute(created.id))
         return
       } else if (initialData) {
         await api.promotions.update(
@@ -482,7 +502,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
           description: "Los cambios se guardaron correctamente.",
         })
       }
-      router.push(ROUTES.PROMOTIONS)
+      router.push(listRoute)
     } catch (err) {
       const isImageError = isPromotionImageError(
         err,
@@ -532,7 +552,8 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
 
   const submitLabel = (() => {
     if (!isSubmitting) {
-      return mode === "create" ? "Crear publicación" : "Guardar cambios"
+      if (mode === "edit") return "Guardar cambios"
+      return isAdmin ? "Publicar" : "Crear publicación"
     }
     if (videoUploadProgress == null) return "Guardando…"
     if (videoUploadProgress >= 1) return "Procesando video…"
@@ -546,12 +567,92 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
         type="button"
         variant="ghost"
         size="sm"
-        onClick={() => router.push(ROUTES.PROMOTIONS)}
+        onClick={() => router.push(listRoute)}
         className="text-muted-foreground -ml-2"
       >
         <ArrowLeft className="mr-1 h-4 w-4" />
         Volver
       </Button>
+
+      {isAdmin && (
+        <Card className="border-border/60">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-semibold">
+                Publicación KYNOO
+              </CardTitle>
+              <Badge
+                variant="outline"
+                className="text-[10px] font-medium bg-[#4a6b1e]/10 text-[#4a6b1e] border-[#4a6b1e]/30"
+              >
+                Sin créditos · Sin revisión
+              </Badge>
+            </div>
+            <CardDescription className="text-xs">
+              Se publica al instante a nombre de la marca que indiques.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="business_name" className="text-xs font-medium">
+                Nombre visible en la app
+              </Label>
+              <Input
+                id="business_name"
+                {...form.register("business_name")}
+                placeholder={KYNOO_PUBLISHER_NAME}
+                className="h-9"
+              />
+              <p className="text-xs text-muted-foreground">
+                Si lo dejas vacío se mostrará &quot;{KYNOO_PUBLISHER_NAME}&quot;.
+              </p>
+            </div>
+
+            {mode === "create" && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Audiencia</Label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {(["all", "list"] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => setAudienceMode(option)}
+                      className={`flex-1 rounded-lg border-2 p-3 text-left transition-colors ${
+                        audienceMode === option
+                          ? "border-foreground bg-muted/50"
+                          : "border-border hover:border-muted-foreground/30"
+                      }`}
+                    >
+                      <p className="text-sm font-medium">
+                        {PROMOTION_AUDIENCE_MODE_LABELS[option]}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {option === "all"
+                          ? "La ven los usuarios cerca de sus ubicaciones, con la segmentación que elijas."
+                          : "Solo la ven los usuarios del CSV, estén donde estén. Las ubicaciones son opcionales."}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+                {audienceMode === "list" && (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    Nadie verá esta publicación hasta que cargues la lista de
+                    usuarios. Después de publicarla podrás subir el CSV.
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {isAdmin && mode === "edit" && initialData && (
+        <PromotionAudienceManager
+          promotion={initialData}
+          onAudienceChange={(nextMode) => setAudienceMode(nextMode)}
+        />
+      )}
 
       {/* Type selection */}
       <Card className="border-border/60">
@@ -1072,9 +1173,18 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
       {/* Location — Geo-targeting via map */}
       <Card className="border-border/60">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold">Ubicación</CardTitle>
+          <CardTitle className="text-sm font-semibold">
+            Ubicación
+            {isAdmin && audienceMode === "list" && (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                (opcional)
+              </span>
+            )}
+          </CardTitle>
           <CardDescription className="text-xs">
-            Configura la ubicación para geo-targeting
+            {isAdmin && audienceMode === "list"
+              ? "En modo lista las ubicaciones no deciden quién la ve: la ven los usuarios del CSV estén donde estén."
+              : "Configura la ubicación para geo-targeting"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1082,6 +1192,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
             <LocationPicker
               promotionId={initialData.id}
               promotionType={initialData.type}
+              context={context}
             />
           ) : (
             <div className="flex flex-col items-center justify-center py-8 text-center space-y-3">
@@ -1094,7 +1205,9 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Después de crear la publicación podrás agregar ubicaciones en el mapa.
-                  Ten todos los puntos listos: al aprobar, se avisará a los usuarios de esa zona.
+                  {isAdmin
+                    ? " No consumen créditos."
+                    : " Ten todos los puntos listos: al aprobar, se avisará a los usuarios de esa zona."}
                 </p>
               </div>
             </div>
@@ -1142,17 +1255,19 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="business_name" className="text-xs font-medium">
-                Nombre del negocio
-              </Label>
-              <Input
-                id="business_name"
-                {...form.register("business_name")}
-                placeholder="Mi Negocio"
-                className="h-9"
-              />
-            </div>
+            {!isAdmin && (
+              <div className="space-y-2">
+                <Label htmlFor="business_name" className="text-xs font-medium">
+                  Nombre del negocio
+                </Label>
+                <Input
+                  id="business_name"
+                  {...form.register("business_name")}
+                  placeholder="Mi Negocio"
+                  className="h-9"
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="business_address" className="text-xs font-medium">
@@ -1282,7 +1397,7 @@ export function PromotionForm({ initialData, mode }: PromotionFormProps) {
           type="button"
           variant="outline"
           disabled={isSubmitting}
-          onClick={() => router.push(ROUTES.PROMOTIONS)}
+          onClick={() => router.push(listRoute)}
         >
           Cancelar
         </Button>

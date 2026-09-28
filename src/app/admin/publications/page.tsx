@@ -1,8 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Loader2 } from "lucide-react"
+import Link from "next/link"
+import { Loader2, Plus } from "lucide-react"
 import { adminApi } from "@/lib/admin-api"
+import { ROUTES } from "@/lib/constants"
+import { Button } from "@/components/ui/button"
 import { AdminPublicationsTable } from "@/components/admin/admin-publications-table"
 import type { Promotion } from "@/types"
 
@@ -36,13 +39,24 @@ export default function AdminPublicationsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-gray-900">Publicaciones</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Promociones y servicios de todos los proveedores. Puedes suspender una
-          publicación para ocultarla en la app, o notificar a los usuarios de la
-          zona (inventario que aún no recibió push).
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Publicaciones</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Promociones y servicios de los proveedores y de KYNOO. Puedes
+            suspender una publicación para ocultarla en la app, o notificar a
+            los usuarios de la zona (inventario que aún no recibió push).
+          </p>
+        </div>
+        <Button
+          asChild
+          className="bg-[#4a6b1e] hover:bg-[#3d5a18] text-white"
+        >
+          <Link href={ROUTES.ADMIN_NEW_PUBLICATION}>
+            <Plus className="mr-1 h-4 w-4" />
+            Nueva publicación
+          </Link>
+        </Button>
       </div>
 
       {isLoading ? (

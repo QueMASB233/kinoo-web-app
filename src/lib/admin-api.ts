@@ -43,6 +43,13 @@ import type {
   AdminReferralCode,
   AdminCreateReferralCodeRequest,
   AdminUpdateReferralCodeRequest,
+  AudienceClearResponse,
+  AudienceImportHistoryItem,
+  AudienceImportMode,
+  AudienceImportReport,
+  AudienceList,
+  PromotionAudienceMode,
+  PromotionAudienceModeResponse,
 } from "@/types"
 
 function buildQuery(params: Record<string, unknown>): string {
@@ -407,6 +414,65 @@ export const adminApi = {
           method: "POST",
           body: JSON.stringify({ force: data.force ?? false }),
         },
+      ),
+  },
+
+  /** Audiencia por lista (CSV). Solo publicaciones KYNOO. */
+  audience: {
+    setMode: (promotionId: string, audienceMode: PromotionAudienceMode) =>
+      apiClient<PromotionAudienceModeResponse>(
+        `/admin/promotions/${promotionId}/audience-mode`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ audience_mode: audienceMode }),
+        },
+      ),
+
+    importCsv: (
+      promotionId: string,
+      file: File,
+      options: { mode: AudienceImportMode; dryRun: boolean },
+    ) => {
+      const form = new FormData()
+      form.append("file", file)
+      form.append("mode", options.mode)
+      form.append("dry_run", String(options.dryRun))
+      return apiClient<AudienceImportReport>(
+        `/admin/promotions/${promotionId}/audience/import`,
+        { method: "POST", body: form },
+      )
+    },
+
+    list: (promotionId: string, params?: { page?: number; limit?: number }) =>
+      apiClient<AudienceList>(
+        `/admin/promotions/${promotionId}/audience${buildQuery(params || {})}`,
+      ),
+
+    exportCsv: async (promotionId: string) => {
+      const token = getAccessToken()
+      const res = await fetch(
+        `${API_BASE_URL}/admin/promotions/${promotionId}/audience/export.csv`,
+        {
+          method: "GET",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
+      )
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || "Error al exportar CSV")
+      }
+      return res.blob()
+    },
+
+    clear: (promotionId: string) =>
+      apiClient<AudienceClearResponse>(
+        `/admin/promotions/${promotionId}/audience`,
+        { method: "DELETE" },
+      ),
+
+    imports: (promotionId: string) =>
+      apiClient<AudienceImportHistoryItem[]>(
+        `/admin/promotions/${promotionId}/audience/imports`,
       ),
   },
 

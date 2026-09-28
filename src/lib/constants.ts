@@ -20,6 +20,8 @@ export const ROUTES = {
   ADMIN_AD_CREDITS: "/admin/ad-credits",
   ADMIN_PROMOTION_FULFILLMENTS: "/admin/promotion-fulfillments",
   ADMIN_PUBLICATIONS: "/admin/publications",
+  ADMIN_NEW_PUBLICATION: "/admin/publications/new",
+  ADMIN_EDIT_PUBLICATION: (id: string) => `/admin/publications/${id}`,
   ADMIN_REFERRAL_CODES: "/admin/referral-codes",
   ADMIN_PROVIDERS: "/admin/providers",
   ADMIN_APP_USERS: "/admin/users",
@@ -99,6 +101,14 @@ export const PROMOTION_STATUS_LABELS: Record<string, string> = {
   inactive: "Inactiva",
   pending_review: "En revisión",
   rejected: "Rechazada",
+}
+
+/** Nombre visible por defecto de las publicaciones creadas por admin (D6). */
+export const KYNOO_PUBLISHER_NAME = "KYNOO"
+
+export const PROMOTION_AUDIENCE_MODE_LABELS: Record<string, string> = {
+  all: "Todos los usuarios (reglas normales)",
+  list: "Solo usuarios de una lista (CSV)",
 }
 
 export const PROMOTION_TYPE_LABELS: Record<string, string> = {

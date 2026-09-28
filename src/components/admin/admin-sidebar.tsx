@@ -96,7 +96,8 @@ export function AdminSidebar({ userName, onLogout }: AdminSidebarProps) {
     },
   ]
 
-  const isActive = (href: string) => pathname === href
+  const isActive = (href: string) =>
+    pathname === href || pathname.startsWith(`${href}/`)
 
   const sidebarContent = (
     <div className="flex h-full flex-col">

@@ -31,6 +31,22 @@ import type { Promotion, PromotionNotificationAudience } from "@/types"
 interface AdminNotifyZoneButtonProps {
   promotion: Promotion
   onUpdated: (updated: Promotion) => void
+  /** icon = tabla de publicaciones; button = sección de audiencia. */
+  variant?: "icon" | "button"
+}
+
+function audienceBlockedReason(
+  preview: PromotionNotificationAudience,
+  isListMode: boolean,
+): string | null {
+  if (isListMode) {
+    return (preview.audience_member_count ?? 0) > 0
+      ? null
+      : "La audiencia está vacía; sube un CSV antes de notificar."
+  }
+  return preview.location_count > 0
+    ? null
+    : "Esta publicación no tiene ubicaciones; no se puede notificar."
 }
 
 function notifyBlockedReason(promo: Promotion): string | null {
@@ -52,7 +68,9 @@ function notifyBlockedReason(promo: Promotion): string | null {
 export function AdminNotifyZoneButton({
   promotion,
   onUpdated,
+  variant = "icon",
 }: AdminNotifyZoneButtonProps) {
+  const isListMode = promotion.audience_mode === "list"
   const { toast } = useToast()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [loadingAudience, setLoadingAudience] = useState(false)
@@ -88,11 +106,7 @@ export function AdminNotifyZoneButton({
         promotion.id,
       )
       setAudience(preview)
-      if (preview.location_count <= 0) {
-        setAudienceError(
-          "Esta publicación no tiene ubicaciones; no se puede notificar.",
-        )
-      }
+      setAudienceError(audienceBlockedReason(preview, isListMode))
     } catch (err) {
       setAudienceError(
         err instanceof ApiError
@@ -105,7 +119,9 @@ export function AdminNotifyZoneButton({
   }
 
   async function confirmNotify() {
-    if (!canNotify || !audience || audience.location_count <= 0) return
+    if (!canNotify || !audience || audienceBlockedReason(audience, isListMode)) {
+      return
+    }
     setSending(true)
     try {
       await adminApi.publications.notifyUsers(promotion.id, {
@@ -120,7 +136,7 @@ export function AdminNotifyZoneButton({
         title: alreadyNotified ? "Reenvío encolado" : "Notificación encolada",
         description: `Se avisará a ~${audience.eligible_count} usuario${
           audience.eligible_count === 1 ? "" : "s"
-        } en la zona.`,
+        } ${isListMode ? "de la lista" : "en la zona"}.`,
       })
       setDialogOpen(false)
     } catch (err) {
@@ -141,45 +157,66 @@ export function AdminNotifyZoneButton({
 
   return (
     <>
-      <TooltipProvider delayDuration={150}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => void openDialog()}
-              className={cn(
-                "inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors",
-                alreadyNotified
-                  ? "text-sky-600 hover:bg-sky-50 hover:text-sky-700"
-                  : canNotify
-                    ? "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                    : "text-gray-300 hover:bg-gray-50 hover:text-gray-400",
-              )}
-              aria-label={statusLabel}
-            >
-              <Icon className="h-4 w-4" strokeWidth={alreadyNotified ? 2.25 : 1.75} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>{statusLabel}</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      {variant === "button" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void openDialog()}
+          >
+            <Icon className="mr-1.5 h-4 w-4" />
+            {alreadyNotified ? "Volver a notificar" : "Notificar a la audiencia"}
+          </Button>
+          <span className="text-xs text-muted-foreground">{statusLabel}</span>
+        </div>
+      ) : (
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => void openDialog()}
+                className={cn(
+                  "inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors",
+                  alreadyNotified
+                    ? "text-sky-600 hover:bg-sky-50 hover:text-sky-700"
+                    : canNotify
+                      ? "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                      : "text-gray-300 hover:bg-gray-50 hover:text-gray-400",
+                )}
+                aria-label={statusLabel}
+              >
+                <Icon className="h-4 w-4" strokeWidth={alreadyNotified ? 2.25 : 1.75} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{statusLabel}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
               {!canNotify
-                ? "Aviso de zona"
+                ? isListMode
+                  ? "Aviso a la audiencia"
+                  : "Aviso de zona"
                 : alreadyNotified
                   ? "Volver a notificar"
-                  : "Notificar zona"}
+                  : isListMode
+                    ? "Notificar audiencia"
+                    : "Notificar zona"}
             </DialogTitle>
             <DialogDescription>
               {!canNotify
                 ? blockedReason
                 : alreadyNotified
                   ? ADMIN_RESEND_NOTIFY_WARNING
-                  : "Se enviará un push a los usuarios en el área de los puntos actuales."}
+                  : isListMode
+                    ? "Se enviará un push exclusivo a los usuarios de la lista, estén donde estén."
+                    : "Se enviará un push a los usuarios en el área de los puntos actuales."}
             </DialogDescription>
           </DialogHeader>
 
@@ -207,11 +244,20 @@ export function AdminNotifyZoneButton({
               ) : audienceError ? (
                 <p className="text-red-600">{audienceError}</p>
               ) : audience ? (
-                <p>
-                  Se avisará a ~{audience.eligible_count} usuario
-                  {audience.eligible_count === 1 ? "" : "s"} en el área de estos
-                  puntos (GPS reciente + segmentación + push activo).
-                </p>
+                isListMode ? (
+                  <p>
+                    Se avisará a ~{audience.eligible_count} de{" "}
+                    {audience.audience_member_count ?? 0} usuario
+                    {audience.audience_member_count === 1 ? "" : "s"} de la
+                    lista (push activo + segmentación).
+                  </p>
+                ) : (
+                  <p>
+                    Se avisará a ~{audience.eligible_count} usuario
+                    {audience.eligible_count === 1 ? "" : "s"} en el área de estos
+                    puntos (GPS reciente + segmentación + push activo).
+                  </p>
+                )
               ) : null)}
           </div>
 
@@ -231,8 +277,7 @@ export function AdminNotifyZoneButton({
                   sending ||
                   loadingAudience ||
                   Boolean(audienceError) ||
-                  !audience ||
-                  audience.location_count <= 0
+                  !audience
                 }
                 onClick={() => void confirmNotify()}
               >
