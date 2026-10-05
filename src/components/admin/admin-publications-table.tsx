@@ -1,9 +1,10 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Link from "next/link"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { Check, Copy, Search } from "lucide-react"
+import { Check, Copy, Pencil, Search } from "lucide-react"
 import {
   BENEFIT_TYPE_LABELS,
   PROMOTION_TYPE_LABELS,
@@ -11,6 +12,7 @@ import {
   ADMIN_FILTER_LABEL_CLASS,
   ADMIN_FILTER_SELECT_CLASS,
   ADMIN_FILTER_PANEL_CLASS,
+  ROUTES,
 } from "@/lib/constants"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -27,16 +29,27 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AdminNotifyZoneButton } from "./admin-notify-zone-button"
 import { AdminSuspensionToggle } from "./admin-suspension-toggle"
 import { AdminPublicationMediaButton } from "./admin-publication-media-button"
-import type { Promotion, PromotionType } from "@/types"
+import type { Promotion, PromotionPublisherType, PromotionType } from "@/types"
 
 type FilterTab = "all" | "active" | "suspended" | "rejected"
 type TypeFilter = "all" | PromotionType
+type PublisherFilter = "all" | PromotionPublisherType
 
 const TYPE_FILTER_OPTIONS: { value: TypeFilter; label: string }[] = [
   { value: "all", label: "Todos los tipos" },
   { value: "promotion", label: PROMOTION_TYPE_LABELS.promotion },
   { value: "service", label: PROMOTION_TYPE_LABELS.service },
 ]
+
+const PUBLISHER_FILTER_OPTIONS: { value: PublisherFilter; label: string }[] = [
+  { value: "all", label: "Todos" },
+  { value: "provider", label: "Proveedores" },
+  { value: "kynoo", label: "KYNOO" },
+]
+
+function isKynoo(promo: Promotion) {
+  return promo.publisher_type === "kynoo"
+}
 
 interface AdminPublicationsTableProps {
   promotions: Promotion[]
@@ -114,6 +127,7 @@ export function AdminPublicationsTable({
   const [search, setSearch] = useState("")
   const [tab, setTab] = useState<FilterTab>("all")
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all")
+  const [publisherFilter, setPublisherFilter] = useState<PublisherFilter>("all")
 
   const filtered = useMemo(() => {
     let result = promotions
@@ -132,6 +146,12 @@ export function AdminPublicationsTable({
       result = result.filter((p) => p.type === typeFilter)
     }
 
+    if (publisherFilter !== "all") {
+      result = result.filter(
+        (p) => (p.publisher_type ?? "provider") === publisherFilter,
+      )
+    }
+
     if (search.trim()) {
       const q = search.toLowerCase()
       result = result.filter(
@@ -144,10 +164,13 @@ export function AdminPublicationsTable({
     }
 
     return result
-  }, [promotions, tab, typeFilter, search])
+  }, [promotions, tab, typeFilter, publisherFilter, search])
 
   const hasActiveFilters =
-    tab !== "all" || typeFilter !== "all" || search.trim().length > 0
+    tab !== "all" ||
+    typeFilter !== "all" ||
+    publisherFilter !== "all" ||
+    search.trim().length > 0
 
   return (
     <div className="space-y-4">
@@ -194,6 +217,29 @@ export function AdminPublicationsTable({
                 ))}
               </select>
             </div>
+
+            <div className="space-y-1">
+              <label
+                className={ADMIN_FILTER_LABEL_CLASS}
+                htmlFor="pub-publisher-filter"
+              >
+                Publicado por
+              </label>
+              <select
+                id="pub-publisher-filter"
+                value={publisherFilter}
+                onChange={(e) =>
+                  setPublisherFilter(e.target.value as PublisherFilter)
+                }
+                className={ADMIN_FILTER_SELECT_CLASS}
+              >
+                {PUBLISHER_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -229,9 +275,20 @@ export function AdminPublicationsTable({
               {filtered.map((promo) => (
                 <TableRow key={promo.id}>
                   <TableCell className="text-sm font-medium max-w-[220px]">
-                    <span className="truncate block" title={promo.title}>
-                      {promo.title}
-                    </span>
+                    {isKynoo(promo) ? (
+                      <Link
+                        href={ROUTES.ADMIN_EDIT_PUBLICATION(promo.id)}
+                        className="group flex items-center gap-1 min-w-0 hover:underline"
+                        title={`Editar: ${promo.title}`}
+                      >
+                        <span className="truncate">{promo.title}</span>
+                        <Pencil className="h-3 w-3 shrink-0 text-gray-400 group-hover:text-gray-700" />
+                      </Link>
+                    ) : (
+                      <span className="truncate block" title={promo.title}>
+                        {promo.title}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="w-[72px]">
                     <AdminPublicationMediaButton promotion={promo} />
@@ -265,7 +322,25 @@ export function AdminPublicationsTable({
                     />
                   </TableCell>
                   <TableCell className="text-xs text-gray-500 max-w-[180px]">
-                    {promo.provider_id ? (
+                    {isKynoo(promo) ? (
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-medium bg-[#4a6b1e]/10 text-[#4a6b1e] border-[#4a6b1e]/30"
+                        >
+                          KYNOO
+                        </Badge>
+                        {promo.audience_mode === "list" && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] font-normal bg-violet-50 text-violet-700 border-violet-200"
+                            title="Solo la ven los usuarios de la lista"
+                          >
+                            Lista · {promo.audience_count ?? 0}
+                          </Badge>
+                        )}
+                      </div>
+                    ) : promo.provider_id ? (
                       <div className="flex items-center gap-1 min-w-0">
                         <span
                           className="font-mono truncate"

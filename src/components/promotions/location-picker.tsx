@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { setOptions, importLibrary } from "@googlemaps/js-api-loader"
 import { api, ApiError } from "@/lib/api-client"
-import { useProviderCredits } from "@/hooks/use-provider-credits"
+import { useOptionalProviderCredits } from "@/hooks/use-provider-credits"
 import { useToast } from "@/hooks/use-toast"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,7 +17,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { CreditsNonRefundableNotice } from "@/components/credits/credits-non-refundable-notice"
-import { PROVIDER_ZONE_NOTIFY_COPY } from "@/lib/promotion-notify"
+import {
+  KYNOO_NOTIFY_COPY,
+  PROVIDER_ZONE_NOTIFY_COPY,
+} from "@/lib/promotion-notify"
 import { MapPin, X, Search, Loader2 } from "lucide-react"
 import Link from "next/link"
 import type {
@@ -39,6 +42,8 @@ import {
 interface LocationPickerProps {
   promotionId: string
   promotionType: "service" | "promotion" | string
+  /** admin = publicación KYNOO: no cobra créditos ni muestra saldo. */
+  context?: "provider" | "admin"
 }
 
 interface MapObjects {
@@ -71,10 +76,16 @@ let googleMapsInitialized = false
 
 // ─── Component ──────────────────────────────────────────
 
-export function LocationPicker({ promotionId, promotionType }: LocationPickerProps) {
+export function LocationPicker({
+  promotionId,
+  promotionType,
+  context = "provider",
+}: LocationPickerProps) {
   const { toast } = useToast()
-  const { balance: creditBalance, setBalance } = useProviderCredits()
-  const chargesCredits = promotionType === "promotion"
+  const credits = useOptionalProviderCredits()
+  const creditBalance = credits?.balance ?? null
+  const isAdmin = context === "admin"
+  const chargesCredits = !isAdmin && promotionType === "promotion"
 
   const [locations, setLocations] = useState<PromotionLocation[]>([])
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([])
@@ -449,7 +460,7 @@ export function LocationPicker({ promotionId, promotionType }: LocationPickerPro
       clearPreview()
       setSelectedPlace(null)
       if (newLocation.balance_after != null) {
-        setBalance(Number(newLocation.balance_after))
+        credits?.setBalance(Number(newLocation.balance_after))
       }
 
       const map = mapInstanceRef.current
@@ -591,7 +602,7 @@ export function LocationPicker({ promotionId, promotionType }: LocationPickerPro
           {locations.length}/{MAX_LOCATIONS} ubicaciones
         </p>
         <p className="text-xs text-muted-foreground mt-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
-          {PROVIDER_ZONE_NOTIFY_COPY}
+          {isAdmin ? KYNOO_NOTIFY_COPY : PROVIDER_ZONE_NOTIFY_COPY}
         </p>
       </div>
 
@@ -613,7 +624,9 @@ export function LocationPicker({ promotionId, promotionType }: LocationPickerPro
 
       {!chargesCredits && (
         <p className="text-sm text-muted-foreground rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
-          Las ubicaciones de servicios no consumen créditos publicitarios.
+          {isAdmin
+            ? "Las publicaciones KYNOO no consumen créditos publicitarios."
+            : "Las ubicaciones de servicios no consumen créditos publicitarios."}
         </p>
       )}
 
@@ -825,7 +838,9 @@ export function LocationPicker({ promotionId, promotionType }: LocationPickerPro
                   />
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    Esta ubicación se eliminará de tu servicio.
+                    {isAdmin
+                      ? "Esta ubicación se eliminará de la publicación."
+                      : "Esta ubicación se eliminará de tu servicio."}
                   </p>
                 )}
               </div>

@@ -12,3 +12,8 @@ export function useProviderCredits() {
   }
   return context
 }
+
+/** Para componentes compartidos con el panel admin, que no monta ProviderCreditsProvider. */
+export function useOptionalProviderCredits() {
+  return useContext(ProviderCreditsContext)
+}
