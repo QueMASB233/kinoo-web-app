@@ -18,7 +18,7 @@ import { AdminCsvExportDialog } from "@/components/admin/admin-csv-export-dialog
 import { AdminPromotionOrdersTab } from "@/components/admin/admin-promotion-orders-tab"
 import { adminApi } from "@/lib/admin-api"
 import { ApiError } from "@/lib/api-client"
-import { useAdminBadges } from "@/providers/admin-provider"
+import { useAdminBadges, useAdminUser } from "@/providers/admin-provider"
 import {
   ADMIN_FILTER_INPUT_CLASS,
   ADMIN_FILTER_LABEL_CLASS,
@@ -85,6 +85,7 @@ function orderStatusLabel(status: string) {
 }
 
 export default function AdminPromotionFulfillmentsPage() {
+  const readOnly = useAdminUser().role_code === "operator"
   const { notifyPendingFulfillmentProcessed } = useAdminBadges()
   const [result, setResult] = useState<AdminPromotionOrderFulfillmentList | null>(
     null,
@@ -251,6 +252,7 @@ export default function AdminPromotionFulfillmentsPage() {
 
         <TabsContent value="orders" className="space-y-4 mt-0">
           <AdminPromotionOrdersTab
+            readOnly={readOnly}
             onRefundSuccess={(message) => {
               setSuccessMessage(message)
               void fetchFulfillments()
@@ -448,7 +450,7 @@ export default function AdminPromotionFulfillmentsPage() {
                           onClick={() => openReview(item)}
                         >
                           <Eye className="h-3.5 w-3.5 mr-1" />
-                          {item.status === "submitted" ? "Revisar" : "Ver"}
+                          {!readOnly && item.status === "submitted" ? "Revisar" : "Ver"}
                         </Button>
                       </div>
                     </td>
@@ -497,7 +499,9 @@ export default function AdminPromotionFulfillmentsPage() {
                     onClick={() => openReview(item)}
                   >
                     <Eye className="h-3.5 w-3.5 mr-1" />
-                    {item.status === "submitted" ? "Revisar" : "Ver detalle"}
+                    {!readOnly && item.status === "submitted"
+                      ? "Revisar"
+                      : "Ver detalle"}
                   </Button>
                 </div>
               </div>
@@ -560,7 +564,7 @@ export default function AdminPromotionFulfillmentsPage() {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {detail?.status === "submitted"
+              {!readOnly && detail?.status === "submitted"
                 ? "Revisar entrega"
                 : "Detalle de entrega"}
             </DialogTitle>
@@ -654,7 +658,7 @@ export default function AdminPromotionFulfillmentsPage() {
                         <p>{detail.admin_notes}</p>
                       </div>
                     )}
-                    {detail.status === "submitted" && (
+                    {!readOnly && detail.status === "submitted" && (
                       <div>
                         <label
                           htmlFor="admin-notes"
@@ -684,7 +688,8 @@ export default function AdminPromotionFulfillmentsPage() {
           )}
           {detail && !detailLoading && (
             <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-end">
-              {detail.status === "submitted" &&
+              {!readOnly &&
+              detail.status === "submitted" &&
               detail.order_status === "paid" ? (
                 <>
                   <Button

@@ -31,10 +31,20 @@ import type {
   AdminPromotionPaidOrderSummary,
   AdminPromotionPaidOrderList,
   AdminPromotionPaidOrderRefundResponse,
+  AdminSubscriptionList,
+  AdminActiveSubscriptionList,
+  AdminSubscriptionNote,
+  AdminSubscriptionNoteList,
+  AdminSubscriptionContractDetail,
+  AdminSubscriptionRefundResponse,
+  AdminKynooRedemptionList,
   PromotionFulfillmentReviewAction,
   AdminProviderList,
   AdminCreateProviderRequest,
   AdminCreateProviderResponse,
+  AdminTeamList,
+  AdminCreateTeamMemberRequest,
+  AdminCreateTeamMemberResponse,
   AdminUpdateProviderRequest,
   AdminUpdateProviderResponse,
   AdminAppUserList,
@@ -79,6 +89,17 @@ export const adminApi = {
     update: (id: string, data: AdminUpdateProviderRequest) =>
       apiClient<AdminUpdateProviderResponse>(`/admin/providers/${id}`, {
         method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+  },
+
+  team: {
+    list: (params?: { search?: string; page?: number; limit?: number }) =>
+      apiClient<AdminTeamList>(`/admin/team${buildQuery(params || {})}`),
+
+    create: (data: AdminCreateTeamMemberRequest) =>
+      apiClient<AdminCreateTeamMemberResponse>("/admin/team", {
+        method: "POST",
         body: JSON.stringify(data),
       }),
   },
@@ -379,6 +400,68 @@ export const adminApi = {
           body: JSON.stringify({ force: data.force ?? false }),
         },
       ),
+  },
+
+  petCareSubscriptions: {
+    list: (promotionId: string) =>
+      apiClient<AdminSubscriptionList>(
+        `/admin/subscriptions${buildQuery({ promotion_id: promotionId })}`,
+      ),
+    get: (subscriptionId: string) =>
+      apiClient<AdminSubscriptionContractDetail>(
+        `/admin/subscriptions/${subscriptionId}`,
+      ),
+    refund: (chargeId: string, reason: string) =>
+      apiClient<AdminSubscriptionRefundResponse>(
+        `/admin/subscriptions/charges/${chargeId}/refund`,
+        {
+          method: "POST",
+          body: JSON.stringify({ reason }),
+        },
+      ),
+  },
+
+  activeSubscriptions: {
+    list: (params?: { search?: string; page?: number; limit?: number }) =>
+      apiClient<AdminActiveSubscriptionList>(
+        `/admin/subscriptions/active${buildQuery(params || {})}`,
+      ),
+    notes: (subscriptionId: string) =>
+      apiClient<AdminSubscriptionNoteList>(
+        `/admin/subscriptions/${subscriptionId}/notes`,
+      ),
+    addNote: (subscriptionId: string, body: string) =>
+      apiClient<AdminSubscriptionNote>(
+        `/admin/subscriptions/${subscriptionId}/notes`,
+        {
+          method: "POST",
+          body: JSON.stringify({ body }),
+        },
+      ),
+  },
+
+  kynooRedemptions: {
+    list: (params?: { search?: string; status?: string; page?: number; limit?: number }) =>
+      apiClient<AdminKynooRedemptionList>(
+        `/admin/kynoo-redemptions${buildQuery(params || {})}`,
+      ),
+    exportCsv: async (params?: { search?: string; status?: string }) => {
+      const token = getAccessToken()
+      const res = await fetch(
+        `${API_BASE_URL}/admin/kynoo-redemptions/export.csv${buildQuery(params || {})}`,
+        {
+          method: "GET",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
+      )
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(
+          typeof err.detail === "string" ? err.detail : "Error al exportar CSV",
+        )
+      }
+      return res.blob()
+    },
   },
 
   publications: {

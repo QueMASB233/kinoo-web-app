@@ -7,6 +7,7 @@ import { ProviderCreditsProvider } from "@/providers/provider-credits-provider"
 import { useAuth } from "@/hooks/use-auth"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Topbar } from "@/components/layout/topbar"
+import { panelHomeForRole } from "@/lib/admin-access"
 import { ROUTES } from "@/lib/constants"
 import { getAccessToken } from "@/lib/auth"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -16,11 +17,16 @@ function DashboardGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (isLoading) return
+    if (!user) {
       const token = getAccessToken()
       if (!token) {
         router.push(ROUTES.LOGIN)
       }
+      return
+    }
+    if (user.role_code === "operator_igs" || user.role_code === "operator") {
+      router.replace(panelHomeForRole(user.role_code) || ROUTES.LOGIN)
     }
   }, [isLoading, user, router])
 

@@ -10,7 +10,8 @@ import {
 import { useRouter } from "next/navigation"
 import { api, ApiError } from "@/lib/api-client"
 import { getAccessToken, setTokens, clearTokens } from "@/lib/auth"
-import { ROUTES, ADMIN_ROLES, PANEL_WEB_ROLES } from "@/lib/constants"
+import { panelHomeForRole } from "@/lib/admin-access"
+import { ROUTES, PANEL_WEB_ROLES } from "@/lib/constants"
 import type { UserResponse } from "@/types"
 
 interface AuthContextType {
@@ -74,8 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )
       ) {
         setUser(userData)
-        const isAdmin = ADMIN_ROLES.includes(userData.role_code as typeof ADMIN_ROLES[number])
-        router.push(isAdmin ? ROUTES.ADMIN_DASHBOARD : ROUTES.PROMOTIONS)
+        router.push(panelHomeForRole(userData.role_code) || ROUTES.LOGIN)
       } else {
         clearTokens()
         throw new ApiError(

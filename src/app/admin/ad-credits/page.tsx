@@ -26,6 +26,7 @@ import type {
   AdminProviderCreditOrderList,
 } from "@/types"
 import { AdminCsvExportDialog } from "@/components/admin/admin-csv-export-dialog"
+import { useAdminUser } from "@/providers/admin-provider"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -66,6 +67,7 @@ function statusLabel(status: string) {
 }
 
 export default function AdminAdCreditsPage() {
+  const readOnly = useAdminUser().role_code === "operator"
   const [result, setResult] = useState<AdminProviderCreditOrderList | null>(
     null,
   )
@@ -301,7 +303,7 @@ export default function AdminAdCreditsPage() {
                       })}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {order.status === "paid" ? (
+                      {!readOnly && order.status === "paid" ? (
                         <Button
                           variant="outline"
                           size="sm"
@@ -359,7 +361,7 @@ export default function AdminAdCreditsPage() {
                     locale: es,
                   })}
                 </p>
-                {order.status === "paid" && (
+                {!readOnly && order.status === "paid" && (
                   <Button
                     variant="outline"
                     size="sm"

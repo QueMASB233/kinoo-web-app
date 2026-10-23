@@ -1,8 +1,13 @@
 // ─── Enums ───────────────────────────────────────────────
 
-export type PromotionType = "promotion" | "service"
+export type PromotionType = "promotion" | "service" | "subscription"
 export type PromotionStatus = "active" | "inactive" | "pending_review" | "rejected"
-export type BenefitType = "discount" | "free_product" | "service" | "points_only"
+export type BenefitType =
+  | "discount"
+  | "free_product"
+  | "service"
+  | "points_only"
+  | "subscription"
 
 // ─── Auth ────────────────────────────────────────────────
 
@@ -137,6 +142,9 @@ export interface Promotion {
   created_at: string
   updated_at: string
   redemptions_count: number
+  /** Precios de Kynoo Pet Care. Ausentes en promociones y servicios. */
+  monthly_price?: string | number | null
+  yearly_price?: string | number | null
   /** Presente en revisión pendiente (admin). */
   locations?: PromotionLocation[] | null
   /** Solo en POST review: si el blast de zona se encoló o se omitió. */
@@ -263,6 +271,9 @@ export interface CreatePromotionRequest {
   status?: PromotionStatus
   /** Solo admin (publicación KYNOO). El backend lo ignora para proveedores. */
   audience_mode?: PromotionAudienceMode
+  /** Solo type subscription. Mayor a 0. Basta uno de los dos. */
+  monthly_price?: number | null
+  yearly_price?: number | null
 }
 
 export interface UpdatePromotionRequest {
@@ -304,6 +315,9 @@ export interface UpdatePromotionRequest {
   status?: PromotionStatus | null
   deactivated_at?: string | null
   deactivation_reason?: string | null
+  /** Solo type subscription. Si se omite, el intervalo ya publicado se mantiene. */
+  monthly_price?: number | null
+  yearly_price?: number | null
 }
 
 // ─── Places & Locations ─────────────────────────────────
@@ -1013,6 +1027,36 @@ export interface AdminCreateProviderResponse {
   welcome_email_sent: boolean
 }
 
+export type TeamRoleCode = "operator_igs" | "operator"
+
+export interface AdminTeamListItem {
+  id: string
+  full_name: string
+  email: string
+  role_code: TeamRoleCode
+  role_label: string
+  status_code: "active" | "blocked" | "suspended"
+  account_activated: boolean
+  created_at: string | null
+}
+
+export interface AdminTeamList {
+  items: AdminTeamListItem[]
+  total: number
+  page: number
+  limit: number
+}
+
+export interface AdminCreateTeamMemberRequest {
+  full_name: string
+  email: string
+  role_code: TeamRoleCode
+}
+
+export interface AdminCreateTeamMemberResponse extends AdminTeamListItem {
+  welcome_email_sent: boolean
+}
+
 export type ProviderStatusCode = "active" | "blocked" | "suspended"
 
 export interface AdminUpdateProviderRequest {
@@ -1061,3 +1105,96 @@ export interface AdminUpdateAppUserRequest {
 }
 
 export type AdminUpdateAppUserResponse = AdminAppUserListItem
+
+export interface AdminSubscriptionContract {
+  id: string
+  promotion_id: string
+  promotion_title: string
+  user_id: string
+  user_name: string
+  user_email: string
+  interval: "monthly" | "yearly"
+  status: string
+  amount_usd: number | string
+  current_period_start: string | null
+  current_period_end: string | null
+  next_charge_at: string | null
+  cancel_at_period_end: boolean
+  failed_attempts: number
+  created_at: string
+}
+
+export interface AdminSubscriptionCharge {
+  id: string
+  kind: string
+  amount_usd: number | string
+  currency: string
+  status: string
+  attempt_number: number
+  nuvei_transaction_id: string | null
+  authorization_code: string | null
+  period_start: string | null
+  period_end: string | null
+  created_at: string
+  refundable: boolean
+}
+
+export interface AdminSubscriptionContractDetail extends AdminSubscriptionContract {
+  charges: AdminSubscriptionCharge[]
+}
+
+export interface AdminSubscriptionList {
+  promotion_id: string
+  promotion_title: string
+  items: AdminSubscriptionContract[]
+  total: number
+}
+
+export interface AdminActiveSubscriptionList {
+  items: AdminSubscriptionContract[]
+  total: number
+  page: number
+  limit: number
+}
+
+export interface AdminSubscriptionNote {
+  id: string
+  user_subscription_id: string
+  author_user_id: string
+  author_name: string
+  body: string
+  created_at: string
+}
+
+export interface AdminSubscriptionNoteList {
+  items: AdminSubscriptionNote[]
+}
+
+export interface AdminSubscriptionRefundResponse {
+  charge_id: string
+  status: string
+  amount_usd: number | string
+  nuvei_transaction_id: string | null
+  authorization_code: string | null
+  message: string
+}
+
+export interface AdminKynooRedemption {
+  id: string
+  user_id: string
+  user_name: string
+  user_email: string
+  promotion_id: string
+  promotion_title: string
+  promotion_type: "promotion" | "service" | string
+  status: "reserved" | "redeemed" | "cancelled" | string
+  reserved_at: string | null
+  redeemed_at: string | null
+}
+
+export interface AdminKynooRedemptionList {
+  items: AdminKynooRedemption[]
+  total: number
+  page: number
+  limit: number
+}

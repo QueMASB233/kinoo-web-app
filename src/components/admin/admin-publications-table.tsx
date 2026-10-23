@@ -39,6 +39,7 @@ const TYPE_FILTER_OPTIONS: { value: TypeFilter; label: string }[] = [
   { value: "all", label: "Todos los tipos" },
   { value: "promotion", label: PROMOTION_TYPE_LABELS.promotion },
   { value: "service", label: PROMOTION_TYPE_LABELS.service },
+  { value: "subscription", label: PROMOTION_TYPE_LABELS.subscription },
 ]
 
 const PUBLISHER_FILTER_OPTIONS: { value: PublisherFilter; label: string }[] = [
@@ -61,6 +62,7 @@ const benefitBadgeColors: Record<string, string> = {
   free_product: "bg-violet-50 text-violet-700 border-violet-200",
   service: "bg-sky-50 text-sky-700 border-sky-200",
   points_only: "bg-orange-50 text-orange-700 border-orange-200",
+  subscription: "bg-emerald-50 text-emerald-800 border-emerald-200",
 }
 
 function statusLabel(promo: Promotion) {
@@ -289,6 +291,14 @@ export function AdminPublicationsTable({
                         {promo.title}
                       </span>
                     )}
+                    {promo.type === "subscription" ? (
+                      <Link
+                        href={ROUTES.ADMIN_SUBSCRIPTION_CONTRACTS(promo.id)}
+                        className="mt-1 block text-xs font-medium text-[#4a6b1e] hover:underline"
+                      >
+                        Contratos
+                      </Link>
+                    ) : null}
                   </TableCell>
                   <TableCell className="w-[72px]">
                     <AdminPublicationMediaButton promotion={promo} />

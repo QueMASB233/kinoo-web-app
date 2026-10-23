@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import type { PaginatedActiveCredits } from "@/types"
 import { AdminEmergencyOrdersTab } from "@/components/admin/admin-emergency-orders-tab"
+import { useAdminUser } from "@/providers/admin-provider"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const LIMIT = 25
@@ -67,6 +68,7 @@ function formatCloseCell(credit: {
 }
 
 export default function EmergencyCreditsPage() {
+  const readOnly = useAdminUser().role_code === "operator"
   const [result, setResult] = useState<PaginatedActiveCredits | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -210,9 +212,10 @@ export default function EmergencyCreditsPage() {
       </div>
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        <strong>En atención</strong> = el usuario pulsó Llamar. Cierra el caso
-        cuando hayas atendido la emergencia o libera el crédito si no hubo
-        contacto.
+        <strong>En atención</strong> = el usuario pulsó Llamar.
+        {readOnly
+          ? " Esta consulta es de solo lectura."
+          : " Cierra el caso cuando hayas atendido la emergencia o libera el crédito si no hubo contacto."}
       </div>
 
       <div className="rounded-lg border border-[#e5e7eb] bg-white p-4">
@@ -335,7 +338,7 @@ export default function EmergencyCreditsPage() {
                         {formatCloseCell(credit)}
                       </td>
                       <td className="px-4 py-3">
-                        {credit.status === "calling" ? (
+                        {!readOnly && credit.status === "calling" ? (
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
@@ -394,7 +397,7 @@ export default function EmergencyCreditsPage() {
                       <span>${credit.amount_usd.toFixed(2)}</span>
                     )}
                   </div>
-                  {credit.status === "calling" && (
+                  {!readOnly && credit.status === "calling" && (
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"

@@ -93,10 +93,12 @@ function phaseLabel(phase: string | null | undefined) {
 }
 
 interface AdminPromotionOrdersTabProps {
+  readOnly?: boolean
   onRefundSuccess?: (message: string) => void
 }
 
 export function AdminPromotionOrdersTab({
+  readOnly = false,
   onRefundSuccess,
 }: AdminPromotionOrdersTabProps) {
   const [items, setItems] = useState<AdminPromotionPaidOrderListItem[]>([])
@@ -379,7 +381,7 @@ export function AdminPromotionOrdersTab({
                       })}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {item.refundable ? (
+                      {!readOnly && item.refundable ? (
                         <Button
                           variant="outline"
                           size="sm"
@@ -426,7 +428,7 @@ export function AdminPromotionOrdersTab({
                 <p className="text-xs text-gray-500">
                   Entrega: {phaseLabel(item.fulfillment_phase)}
                 </p>
-                {item.refundable && (
+                {!readOnly && item.refundable && (
                   <Button
                     variant="outline"
                     size="sm"

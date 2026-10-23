@@ -19,11 +19,16 @@ export const ROUTES = {
   ADMIN_EMERGENCY_CREDITS: "/admin/emergency-credits",
   ADMIN_AD_CREDITS: "/admin/ad-credits",
   ADMIN_PROMOTION_FULFILLMENTS: "/admin/promotion-fulfillments",
+  ADMIN_ACTIVE_SUBSCRIPTIONS: "/admin/active-subscriptions",
+  ADMIN_KYNOO_REDEMPTIONS: "/admin/kynoo-redemptions",
   ADMIN_PUBLICATIONS: "/admin/publications",
   ADMIN_NEW_PUBLICATION: "/admin/publications/new",
   ADMIN_EDIT_PUBLICATION: (id: string) => `/admin/publications/${id}`,
+  ADMIN_SUBSCRIPTION_CONTRACTS: (id: string) =>
+    `/admin/publications/${id}/subscriptions`,
   ADMIN_REFERRAL_CODES: "/admin/referral-codes",
   ADMIN_PROVIDERS: "/admin/providers",
+  ADMIN_TEAM: "/admin/team",
   ADMIN_APP_USERS: "/admin/users",
   ADMIN_KNOWLEDGE: "/admin/knowledge",
   ADMIN_KNOWLEDGE_DETAIL: (id: string) => `/admin/knowledge/${id}`,
@@ -60,11 +65,16 @@ export const KNOWLEDGE_CATEGORY_COLORS: Record<string, string> = {
   otro: "bg-gray-100 text-gray-800",
 }
 
-/** Roles con acceso al panel /admin (backoffice). */
+/** Roles con acceso total al panel /admin. */
 export const ADMIN_ROLES = ["admin"] as const
 
-/** Roles con acceso al panel web kinoo-web-app (proveedor + backoffice). */
-export const PANEL_WEB_ROLES = ["provider", "admin"] as const
+/** Roles con acceso al panel web kinoo-web-app. */
+export const PANEL_WEB_ROLES = [
+  "provider",
+  "admin",
+  "operator_igs",
+  "operator",
+] as const
 
 /**
  * Puntos KYNOO — copy de producto (solo UI).
@@ -77,12 +87,14 @@ export const BENEFIT_TYPE_LABELS: Record<string, string> = {
   free_product: "Producto gratis",
   service: "Servicio",
   points_only: "Solo Puntos KYNOO",
+  subscription: "Kynoo Pet Care",
 }
 
 /** Tipos de beneficio permitidos según el tipo de publicación. */
 export const BENEFIT_TYPES_BY_PUBLICATION_TYPE = {
   promotion: ["discount", "free_product", "points_only"],
   service: ["service"],
+  subscription: ["subscription"],
 } as const
 
 export type PublicationType = keyof typeof BENEFIT_TYPES_BY_PUBLICATION_TYPE
@@ -114,6 +126,7 @@ export const PROMOTION_AUDIENCE_MODE_LABELS: Record<string, string> = {
 export const PROMOTION_TYPE_LABELS: Record<string, string> = {
   promotion: "Promoción",
   service: "Servicio",
+  subscription: "Suscripción",
 }
 
 export const CREDIT_ORDER_STATUS_LABELS: Record<string, string> = {

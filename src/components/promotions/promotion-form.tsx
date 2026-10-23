@@ -79,14 +79,54 @@ function resolveInitialMediaType(promo?: Promotion): PromotionMediaType {
   return promo?.video_url ? "video" : "image"
 }
 
+function formatPriceInput(value: string | number | null | undefined): string {
+  if (value == null || value === "") return ""
+  const amount = Number(value)
+  if (!Number.isFinite(amount) || amount <= 0) return ""
+  return amount.toFixed(2)
+}
+
+/** null = vacío. NaN = el texto no es un monto válido. */
+function parseOptionalPrice(raw: string | undefined): number | null {
+  const trimmed = (raw ?? "").trim().replace(",", ".")
+  if (!trimmed) return null
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return Number.NaN
+  const amount = Number(trimmed)
+  if (!Number.isFinite(amount) || amount <= 0) return Number.NaN
+  return amount
+}
+
+const PUBLICATION_TYPE_COPY = {
+  promotion: {
+    title: "Promoción",
+    description: "Descuentos, productos gratis, cupones",
+  },
+  service: {
+    title: "Servicio",
+    description: "Servicios presenciales o virtuales",
+  },
+  subscription: {
+    title: "Suscripción",
+    description: "Kynoo Pet Care. Mensual, anual o ambos",
+  },
+} as const
+
 // ─── Schema ──────────────────────────────────────────────
 
 const formSchema = z
   .object({
-    type: z.enum(["promotion", "service"]),
+    type: z.enum(["promotion", "service", "subscription"]),
     title: z.string().min(3, "Mínimo 3 caracteres").max(255),
     description: z.string().optional(),
-    benefit_type: z.enum(["discount", "free_product", "service", "points_only"]),
+    benefit_type: z.enum([
+      "discount",
+      "free_product",
+      "service",
+      "points_only",
+      "subscription",
+    ]),
+    monthly_price: z.string().optional(),
+    yearly_price: z.string().optional(),
   link: z
     .string()
     .refine((val) => val === "" || val.startsWith("https://"), {
@@ -115,6 +155,32 @@ const formSchema = z
   is_presential: z.boolean(),
   })
   .superRefine((data, ctx) => {
+    if (data.type === "subscription") {
+      const monthly = parseOptionalPrice(data.monthly_price)
+      const yearly = parseOptionalPrice(data.yearly_price)
+      if (Number.isNaN(monthly)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["monthly_price"],
+          message: "Usa un monto mayor a 0, con hasta 2 decimales",
+        })
+      }
+      if (Number.isNaN(yearly)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["yearly_price"],
+          message: "Usa un monto mayor a 0, con hasta 2 decimales",
+        })
+      }
+      if (monthly == null && yearly == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["monthly_price"],
+          message: "Indica el precio mensual, el anual o ambos",
+        })
+      }
+      return
+    }
     if (!isBenefitAllowedForPublication(data.type, data.benefit_type)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -220,6 +286,8 @@ export function PromotionForm({
           title: initialData.title,
           description: initialData.description || "",
           benefit_type: initialData.benefit_type,
+          monthly_price: formatPriceInput(initialData.monthly_price),
+          yearly_price: formatPriceInput(initialData.yearly_price),
           link: initialData.link || "",
           coupon_code: initialData.coupon_code || "",
           redeem_message: initialData.redeem_message || "",
@@ -249,6 +317,8 @@ export function PromotionForm({
           title: "",
           description: "",
           benefit_type: "discount" as BenefitType,
+          monthly_price: "",
+          yearly_price: "",
           link: "",
           coupon_code: "",
           redeem_message: "",
@@ -282,6 +352,12 @@ export function PromotionForm({
   const allowedBenefitTypes = BENEFIT_TYPES_BY_PUBLICATION_TYPE[watchType]
 
   useEffect(() => {
+    if (watchType === "subscription") {
+      if (watchBenefitType !== "subscription") {
+        form.setValue("benefit_type", "subscription")
+      }
+      return
+    }
     if (!isBenefitAllowedForPublication(watchType, watchBenefitType)) {
       form.setValue(
         "benefit_type",
@@ -412,6 +488,7 @@ export function PromotionForm({
     const publicationType =
       mode === "edit" && initialData ? initialData.type : values.type
     const isService = publicationType === "service"
+    const isSubscription = publicationType === "subscription"
     const pointsCost = isService
       ? 0
       : Math.max(0, Math.floor(Number(values.points_cost) || 0))
@@ -419,12 +496,18 @@ export function PromotionForm({
       isService || !values.is_referral_only
         ? 0
         : Math.max(0, Math.floor(Number(values.min_referral_points_required) || 0))
+    const monthlyPrice = isSubscription
+      ? parseOptionalPrice(values.monthly_price)
+      : null
+    const yearlyPrice = isSubscription
+      ? parseOptionalPrice(values.yearly_price)
+      : null
 
     const payload = {
       type: publicationType,
       title: values.title,
       description: values.description || null,
-      benefit_type: values.benefit_type,
+      benefit_type: isSubscription ? "subscription" : values.benefit_type,
       media_type: mediaType,
       image_url: imageUrl,
       link: values.link || null,
@@ -434,7 +517,9 @@ export function PromotionForm({
       points_cost: pointsCost,
       is_referral_only: Boolean(values.is_referral_only),
       min_referral_points_required: minReferralPoints,
-      is_single_use_per_user: values.is_single_use_per_user,
+      is_single_use_per_user: isSubscription
+        ? false
+        : values.is_single_use_per_user,
       stock_total: values.has_limited_stock ? (values.stock_total ?? null) : null,
       start_date: values.start_date.toISOString(),
       end_date: values.end_date.toISOString(),
@@ -451,6 +536,14 @@ export function PromotionForm({
       service_price: values.service_price ?? null,
       is_presential: values.is_presential,
       ...(isAdmin && mode === "create" ? { audience_mode: audienceMode } : {}),
+      ...(isSubscription &&
+      monthlyPrice != null &&
+      !Number.isNaN(monthlyPrice)
+        ? { monthly_price: monthlyPrice }
+        : {}),
+      ...(isSubscription && yearlyPrice != null && !Number.isNaN(yearlyPrice)
+        ? { yearly_price: yearlyPrice }
+        : {}),
       ...(mediaType === "image" && mode === "edit" ? { clear_video: true } : {}),
       ...(mediaType === "video" &&
       mode === "edit" &&
@@ -659,14 +752,20 @@ export function PromotionForm({
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold">Tipo de publicación</CardTitle>
           <CardDescription className="text-xs">
-            Elige si quieres publicar una promoción o un servicio
+            {isAdmin
+              ? "Promoción, servicio o suscripción Kynoo Pet Care"
+              : "Elige si quieres publicar una promoción o un servicio"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex gap-3">
-            {(["promotion", "service"] as const).map((t) => {
+          <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+            {(isAdmin
+              ? (["promotion", "service", "subscription"] as const)
+              : (["promotion", "service"] as const)
+            ).map((t) => {
               const isSelected = watchType === t
               const isLocked = mode === "edit"
+              const copy = PUBLICATION_TYPE_COPY[t]
               return (
                 <button
                   key={t}
@@ -679,11 +778,13 @@ export function PromotionForm({
                       form.setValue("min_referral_points_required", 0)
                       form.setValue("points_cost", 0)
                       form.setValue("is_referral_only", false)
+                    } else if (t === "subscription") {
+                      form.setValue("benefit_type", "subscription")
                     } else if (form.getValues("benefit_type") === "service") {
                       form.setValue("benefit_type", "discount")
                     }
                   }}
-                  className={`flex-1 rounded-lg border-2 p-4 text-center transition-colors ${
+                  className={`rounded-lg border-2 p-4 text-center transition-colors ${
                     isSelected
                       ? "border-foreground bg-muted/50"
                       : isLocked
@@ -691,13 +792,9 @@ export function PromotionForm({
                         : "border-border hover:border-muted-foreground/30"
                   }`}
                 >
-                  <p className="text-sm font-medium">
-                    {t === "promotion" ? "Promoción" : "Servicio"}
-                  </p>
+                  <p className="text-sm font-medium">{copy.title}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {t === "promotion"
-                      ? "Descuentos, productos gratis, cupones"
-                      : "Servicios presenciales o virtuales"}
+                    {copy.description}
                   </p>
                 </button>
               )
@@ -744,13 +841,23 @@ export function PromotionForm({
             />
           </div>
 
+          {watchType === "subscription" ? (
+            <div className="space-y-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
+              <p className="text-xs font-medium text-emerald-900">
+                Etiqueta en la app: Kynoo Pet Care
+              </p>
+              <p className="text-xs text-emerald-800">
+                No se elige un beneficio. Esta ficha no se canjea ni se abre como servicio.
+              </p>
+            </div>
+          ) : (
           <div className="space-y-2">
             <Label className="text-xs font-medium">Tipo de beneficio *</Label>
             <Select
               value={form.watch("benefit_type")}
               disabled={watchType === "service"}
               onValueChange={(v) =>
-                form.setValue("benefit_type", v as BenefitType)
+                form.setValue("benefit_type", v as FormValues["benefit_type"])
               }
             >
               <SelectTrigger
@@ -784,6 +891,7 @@ export function PromotionForm({
               </p>
             )}
           </div>
+          )}
 
           <div className="space-y-3">
             <div>
@@ -931,7 +1039,62 @@ export function PromotionForm({
         </CardContent>
       </Card>
 
+      {watchType === "subscription" && (
+        <Card className="border-border/60">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold">Precio</CardTitle>
+            <CardDescription className="text-xs">
+              Mensual, anual o ambos. Aquí no se pide tarjeta.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="monthly_price" className="text-xs font-medium">
+                  Precio mensual (USD)
+                </Label>
+                <Input
+                  id="monthly_price"
+                  inputMode="decimal"
+                  placeholder="9.99"
+                  {...form.register("monthly_price")}
+                  className="h-9"
+                />
+                {form.formState.errors.monthly_price && (
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.monthly_price.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="yearly_price" className="text-xs font-medium">
+                  Precio anual (USD)
+                </Label>
+                <Input
+                  id="yearly_price"
+                  inputMode="decimal"
+                  placeholder="99.00"
+                  {...form.register("yearly_price")}
+                  className="h-9"
+                />
+                {form.formState.errors.yearly_price && (
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.yearly_price.message}
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Deja vacío el intervalo que no quieras ofrecer. Si ya estaba publicado,
+              vaciar el campo no lo borra. Cambiar un monto no altera lo que ya paga
+              un contrato vigente.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Redemption / Coupon */}
+      {watchType !== "subscription" && (
       <Card className="border-border/60">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold">Canje y cupones</CardTitle>
@@ -980,6 +1143,7 @@ export function PromotionForm({
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Puntos y acceso */}
       <Card className="border-border/60">
@@ -990,7 +1154,7 @@ export function PromotionForm({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {watchType === "promotion" && (
+          {watchType !== "service" && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <Label htmlFor="points_cost" className="text-xs font-medium">
@@ -1022,9 +1186,13 @@ export function PromotionForm({
                 className="h-9 w-[200px]"
               />
               <p className="text-xs text-muted-foreground">
-                {Number(watchPointsCost) > 0
-                  ? `Se descontarán ${watchPointsCost} puntos al canjear.`
-                  : "0 = gratis. No se descuentan puntos."}
+                {watchType === "subscription"
+                  ? Number(watchPointsCost) > 0
+                    ? `Se descuentan ${watchPointsCost} puntos una sola vez, al activar.`
+                    : "0 = no se descuentan puntos al activar."
+                  : Number(watchPointsCost) > 0
+                    ? `Se descontarán ${watchPointsCost} puntos al canjear.`
+                    : "0 = gratis. No se descuentan puntos."}
               </p>
             </div>
           )}
@@ -1049,7 +1217,7 @@ export function PromotionForm({
             />
           </div>
 
-          {watchType === "promotion" && watchIsReferralOnly && (
+          {watchType !== "service" && watchIsReferralOnly && (
             <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 p-3">
               <div className="flex items-center gap-2 flex-wrap">
                 <Label
@@ -1091,6 +1259,12 @@ export function PromotionForm({
             </div>
           )}
 
+          {watchType === "subscription" ? (
+            <p className="text-xs text-muted-foreground">
+              Cada persona puede tener un contrato vigente de esta ficha. Cuando
+              ese periodo termina, puede contratar de nuevo si queda cupo.
+            </p>
+          ) : (
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <Label className="text-xs font-medium">Uso único por usuario</Label>
@@ -1107,6 +1281,7 @@ export function PromotionForm({
               }
             />
           </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1120,7 +1295,9 @@ export function PromotionForm({
             <div>
               <Label className="text-xs font-medium">Stock limitado</Label>
               <p className="text-xs text-muted-foreground">
-                Limitar la cantidad de canjes disponibles
+                {watchType === "subscription"
+                  ? "Limitar la cantidad de contratos. El cupo baja en el primer cobro y se libera cuando el contrato termina."
+                  : "Limitar la cantidad de canjes disponibles"}
               </p>
             </div>
             <Switch
@@ -1167,6 +1344,12 @@ export function PromotionForm({
               )}
             </div>
           </div>
+          {watchType === "subscription" && (
+            <p className="text-xs text-muted-foreground">
+              Estas fechas son la ventana para contratar. Quien ya pagó sigue
+              hasta el fin de su periodo aunque la oferta cierre.
+            </p>
+          )}
         </CardContent>
       </Card>
 

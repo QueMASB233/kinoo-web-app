@@ -11,15 +11,18 @@ import {
   ScrollText,
   Activity,
   Phone,
+  ClipboardList,
   BookOpen,
   Wallet,
   PackageCheck,
   Building2,
+  UserRound,
   Users,
   LogOut,
   Menu,
   X,
 } from "lucide-react"
+import { adminRoleLabel, type AdminPanelRole } from "@/lib/admin-access"
 import { ROUTES } from "@/lib/constants"
 import { useAdminBadges } from "@/providers/admin-provider"
 import { cn } from "@/lib/utils"
@@ -30,71 +33,124 @@ interface NavItem {
   icon: React.ElementType
   label: string
   href: string
+  roles: readonly AdminPanelRole[]
   badge?: number
 }
 
 interface AdminSidebarProps {
   userName: string
+  roleCode?: string | null
+  homeHref: string
   onLogout: () => void
 }
 
-export function AdminSidebar({ userName, onLogout }: AdminSidebarProps) {
+export function AdminSidebar({
+  userName,
+  roleCode,
+  homeHref,
+  onLogout,
+}: AdminSidebarProps) {
   const pathname = usePathname()
   const { pendingReviewCount, pendingFulfillmentCount } = useAdminBadges()
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const navItems: NavItem[] = [
-    { icon: LayoutDashboard, label: "Dashboard", href: ROUTES.ADMIN_DASHBOARD },
+    {
+      icon: LayoutDashboard,
+      label: "Dashboard",
+      href: ROUTES.ADMIN_DASHBOARD,
+      roles: ["admin"],
+    },
     {
       icon: ClipboardCheck,
       label: "Revisión",
       href: ROUTES.ADMIN_REVIEW,
       badge: pendingReviewCount,
+      roles: ["admin"],
     },
     {
       icon: Megaphone,
       label: "Publicaciones",
       href: ROUTES.ADMIN_PUBLICATIONS,
+      roles: ["admin"],
+    },
+    {
+      icon: ClipboardList,
+      label: "Suscripciones activas",
+      href: ROUTES.ADMIN_ACTIVE_SUBSCRIPTIONS,
+      roles: ["admin", "operator_igs"],
     },
     {
       icon: Ticket,
       label: "Códigos referido",
       href: ROUTES.ADMIN_REFERRAL_CODES,
+      roles: ["admin"],
     },
     {
       icon: Building2,
       label: "Proveedores",
       href: ROUTES.ADMIN_PROVIDERS,
+      roles: ["admin"],
+    },
+    {
+      icon: UserRound,
+      label: "Equipo",
+      href: ROUTES.ADMIN_TEAM,
+      roles: ["admin"],
     },
     {
       icon: Users,
       label: "Usuarios",
       href: ROUTES.ADMIN_APP_USERS,
+      roles: ["admin"],
     },
-    { icon: ScrollText, label: "Auditoría", href: ROUTES.ADMIN_AUDIT_LOGS },
-    { icon: Activity, label: "Eventos", href: ROUTES.ADMIN_EVENTS },
+    {
+      icon: ScrollText,
+      label: "Auditoría",
+      href: ROUTES.ADMIN_AUDIT_LOGS,
+      roles: ["admin"],
+    },
+    {
+      icon: Activity,
+      label: "Eventos",
+      href: ROUTES.ADMIN_EVENTS,
+      roles: ["admin"],
+    },
     {
       icon: Phone,
       label: "Créditos Activos",
       href: ROUTES.ADMIN_EMERGENCY_CREDITS,
+      roles: ["admin", "operator_igs", "operator"],
     },
     {
       icon: Wallet,
       label: "Créditos publicitarios",
       href: ROUTES.ADMIN_AD_CREDITS,
+      roles: ["admin", "operator"],
     },
     {
       icon: PackageCheck,
       label: "Servicios",
       href: ROUTES.ADMIN_PROMOTION_FULFILLMENTS,
       badge: pendingFulfillmentCount,
+      roles: ["admin", "operator"],
+    },
+    {
+      icon: Ticket,
+      label: "Canjes Kynoo",
+      href: ROUTES.ADMIN_KYNOO_REDEMPTIONS,
+      roles: ["admin", "operator"],
     },
     {
       icon: BookOpen,
       label: "Base de Conocimiento",
       href: ROUTES.ADMIN_KNOWLEDGE,
+      roles: ["admin"],
     },
   ]
+  const visibleItems = navItems.filter((item) =>
+    roleCode ? item.roles.includes(roleCode as AdminPanelRole) : false,
+  )
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`)
@@ -103,17 +159,17 @@ export function AdminSidebar({ userName, onLogout }: AdminSidebarProps) {
     <div className="flex h-full flex-col">
       {/* Logo */}
       <div className="flex h-14 items-center gap-2 border-b border-gray-200 px-5">
-        <Link href={ROUTES.ADMIN_DASHBOARD} aria-label="KYNOO — Dashboard">
+        <Link href={homeHref} aria-label="KYNOO">
           <KynooLogo height={26} />
         </Link>
         <span className="rounded bg-gray-900 px-1.5 py-0.5 text-[10px] font-medium text-white uppercase tracking-wider">
-          Admin
+          {adminRoleLabel(roleCode)}
         </span>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navItems.map((item) => (
+        {visibleItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}

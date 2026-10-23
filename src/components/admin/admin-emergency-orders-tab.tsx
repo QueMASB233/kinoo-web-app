@@ -12,6 +12,7 @@ import {
   Undo2,
 } from "lucide-react"
 import { adminApi } from "@/lib/admin-api"
+import { useAdminUser } from "@/providers/admin-provider"
 import { ApiError } from "@/lib/api-client"
 import {
   ADMIN_FILTER_INPUT_CLASS,
@@ -120,6 +121,7 @@ interface AdminEmergencyOrdersTabProps {
 export function AdminEmergencyOrdersTab({
   onRefundSuccess,
 }: AdminEmergencyOrdersTabProps) {
+  const readOnly = useAdminUser().role_code === "operator"
   const [items, setItems] = useState<AdminEmergencyCreditOrderListItem[]>([])
   const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -380,7 +382,7 @@ export function AdminEmergencyOrdersTab({
                       })}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {item.refundable ? (
+                      {!readOnly && item.refundable ? (
                         <Button
                           variant="outline"
                           size="sm"
@@ -422,7 +424,7 @@ export function AdminEmergencyOrdersTab({
                 <p className="text-sm text-gray-700">
                   ${Number(item.amount_usd).toFixed(2)} · {formatCreditCell(item)}
                 </p>
-                {item.refundable && (
+                {!readOnly && item.refundable && (
                   <Button
                     variant="outline"
                     size="sm"

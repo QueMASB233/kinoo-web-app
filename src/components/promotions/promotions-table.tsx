@@ -50,6 +50,7 @@ const benefitBadgeColors: Record<string, string> = {
   free_product: "bg-violet-50 text-violet-700 border-violet-200",
   service: "bg-sky-50 text-sky-700 border-sky-200",
   points_only: "bg-orange-50 text-orange-700 border-orange-200",
+  subscription: "bg-emerald-50 text-emerald-800 border-emerald-200",
 }
 
 export function PromotionsTable({
