@@ -56,6 +56,48 @@ export interface UserResponse {
   referral_points: number
   referral_validated_count: number
   interest_codes: string[] | null
+  phone_e164?: string | null
+}
+
+export type BillingMode = "final_consumer" | "with_data"
+export type BillingIdType = "cedula" | "ruc" | "passport"
+
+export interface BillingProfile {
+  mode: BillingMode
+  id_type: BillingIdType | null
+  id_number: string | null
+  legal_name: string | null
+  billing_email: string | null
+  billing_address_line: string | null
+  updated_at?: string | null
+}
+
+export interface BillingProfileUpsert {
+  mode: BillingMode
+  id_type?: BillingIdType | null
+  id_number?: string | null
+  legal_name?: string | null
+  billing_email?: string | null
+  billing_address_line?: string | null
+}
+
+export interface CheckoutIdentityPayload {
+  phone_e164?: string | null
+  billing?: BillingProfileUpsert | null
+}
+
+/** Snapshot congelado en órdenes (shape §5.4). */
+export interface CheckoutSnapshot {
+  phone_e164?: string | null
+  billing?: {
+    mode?: BillingMode | string | null
+    id_type?: string | null
+    id_number?: string | null
+    legal_name?: string | null
+    billing_email?: string | null
+    billing_address_line?: string | null
+  } | null
+  shipping?: Record<string, unknown> | null
 }
 
 export type PromotionNotificationDispatchStatus = "queued" | "skipped"
@@ -563,6 +605,7 @@ export interface AdminEmergencyCreditOrderListItem {
   refundable: boolean
   requires_force: boolean
   credit_owns_cycle: boolean
+  checkout_snapshot?: CheckoutSnapshot | null
 }
 
 export interface AdminEmergencyCreditOrderList {
@@ -802,6 +845,7 @@ export interface ProviderCreditOrder {
   created_at: string
   updated_at: string
   checkout_url?: string | null
+  checkout_snapshot?: CheckoutSnapshot | null
 }
 
 export interface ProviderCreditOrderCreateResponse {
@@ -921,6 +965,7 @@ export interface AdminPromotionOrderFulfillment extends PromotionOrderFulfillmen
   paid_at?: string | null
   nuvei_transaction_id?: string | null
   order_status: string
+  checkout_snapshot?: CheckoutSnapshot | null
 }
 
 export interface AdminPromotionOrderFulfillmentDetail
@@ -956,6 +1001,7 @@ export interface AdminPromotionPaidOrderSummary {
   fulfillment_status?: string | null
   refundable: boolean
   requires_force: boolean
+  checkout_snapshot?: CheckoutSnapshot | null
 }
 
 export interface AdminPromotionPaidOrderListItem
@@ -1122,6 +1168,7 @@ export interface AdminSubscriptionContract {
   cancel_at_period_end: boolean
   failed_attempts: number
   created_at: string
+  checkout_snapshot?: CheckoutSnapshot | null
 }
 
 export interface AdminSubscriptionCharge {
@@ -1137,6 +1184,7 @@ export interface AdminSubscriptionCharge {
   period_end: string | null
   created_at: string
   refundable: boolean
+  checkout_snapshot?: CheckoutSnapshot | null
 }
 
 export interface AdminSubscriptionContractDetail extends AdminSubscriptionContract {

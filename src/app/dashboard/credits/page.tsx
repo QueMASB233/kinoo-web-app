@@ -15,8 +15,10 @@ import { CustomCreditPurchaseModal } from "@/components/credits/custom-credit-pu
 import { CreditTransactionsTable } from "@/components/credits/credit-transactions-table"
 import { NuveiCheckoutModal } from "@/components/credits/nuvei-checkout-modal"
 import { PendingPaymentBanner } from "@/components/credits/pending-payment-banner"
+import { CheckoutIdentityDialog } from "@/components/billing/checkout-identity-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import type {
+  CheckoutIdentityPayload,
   CreditPack,
   CustomPurchaseSettings,
   ProviderCreditOrder,
@@ -65,6 +67,10 @@ export default function CreditsPage() {
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false)
   const [isPolling, setIsPolling] = useState(false)
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
+  const [identityOpen, setIdentityOpen] = useState(false)
+  const [pendingPurchase, setPendingPurchase] = useState<
+    { pack_id: string } | { credits: number } | null
+  >(null)
   const pollAttempts = useRef(0)
 
   const refreshData = useCallback(async () => {
@@ -210,7 +216,9 @@ export default function CreditsPage() {
   }, [pendingOrder, pendingCheckoutUrl, refreshData, toast, clearPendingOrder])
 
   async function startCheckout(
-    payload: { pack_id: string } | { credits: number },
+    payload:
+      | ({ pack_id: string } & CheckoutIdentityPayload)
+      | ({ credits: number } & CheckoutIdentityPayload),
     loadingKey: string,
   ) {
     const isCustom = "credits" in payload
@@ -258,15 +266,26 @@ export default function CreditsPage() {
     } finally {
       setPurchasingPackId(null)
       setIsPurchasingCustom(false)
+      setPendingPurchase(null)
     }
   }
 
-  async function handlePurchase(packId: string) {
-    await startCheckout({ pack_id: packId }, packId)
+  function handlePurchase(packId: string) {
+    setPendingPurchase({ pack_id: packId })
+    setIdentityOpen(true)
   }
 
-  async function handleCustomPurchase(credits: number) {
-    await startCheckout({ credits }, "custom")
+  function handleCustomPurchase(credits: number) {
+    setPendingPurchase({ credits })
+    setIdentityOpen(true)
+  }
+
+  async function handleIdentityConfirm(identity: CheckoutIdentityPayload) {
+    if (!pendingPurchase) return
+    setIdentityOpen(false)
+    const loadingKey =
+      "pack_id" in pendingPurchase ? pendingPurchase.pack_id : "custom"
+    await startCheckout({ ...pendingPurchase, ...identity }, loadingKey)
   }
 
   if (isLoading) {
@@ -285,6 +304,15 @@ export default function CreditsPage() {
 
   return (
     <div className="space-y-8">
+      <CheckoutIdentityDialog
+        open={identityOpen}
+        onOpenChange={(open) => {
+          setIdentityOpen(open)
+          if (!open) setPendingPurchase(null)
+        }}
+        onConfirm={(payload) => void handleIdentityConfirm(payload)}
+      />
+
       <NuveiCheckoutModal
         open={isCheckoutOpen && Boolean(pendingCheckoutUrl)}
         checkoutUrl={pendingCheckoutUrl}

@@ -273,6 +273,13 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
+    getBilling: () =>
+      apiClient<import("@/types").BillingProfile>("/users/me/billing"),
+    upsertBilling: (data: import("@/types").BillingProfileUpsert) =>
+      apiClient<import("@/types").BillingProfile>("/users/me/billing", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
   },
 
   promotions: {
@@ -408,7 +415,9 @@ export const api = {
         `/provider/credits/transactions?limit=${limit}&offset=${offset}`,
       ),
     createOrder: (
-      payload: { pack_id: string } | { credits: number },
+      payload:
+        | ({ pack_id: string } & import("@/types").CheckoutIdentityPayload)
+        | ({ credits: number } & import("@/types").CheckoutIdentityPayload),
       idempotencyKey?: string,
     ) => {
       const headers: Record<string, string> = {}

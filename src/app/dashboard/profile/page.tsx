@@ -26,6 +26,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { Loader2 } from "lucide-react"
 import { KYNOO_POINTS_BRAND } from "@/lib/constants"
+import { ProviderBillingCard } from "@/components/billing/provider-billing-card"
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -208,6 +209,8 @@ export default function ProfilePage() {
           </form>
         </CardContent>
       </Card>
+
+      <ProviderBillingCard />
 
       {/* Stats */}
       <Card className="border-border/60">

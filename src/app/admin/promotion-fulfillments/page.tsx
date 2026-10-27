@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { AdminCsvExportDialog } from "@/components/admin/admin-csv-export-dialog"
 import { AdminPromotionOrdersTab } from "@/components/admin/admin-promotion-orders-tab"
+import { CheckoutSnapshotView } from "@/components/admin/checkout-snapshot-view"
 import { adminApi } from "@/lib/admin-api"
 import { ApiError } from "@/lib/api-client"
 import { useAdminBadges, useAdminUser } from "@/providers/admin-provider"
@@ -619,6 +620,7 @@ export default function AdminPromotionFulfillmentsPage() {
                         )}
                       </div>
                     </div>
+                    <CheckoutSnapshotView snapshot={detail.checkout_snapshot} />
                     {detail.scheduling_notes && (
                       <div className="rounded bg-gray-50 px-3 py-2 text-xs">
                         <p className="font-medium text-gray-700">

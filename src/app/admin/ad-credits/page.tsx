@@ -26,6 +26,7 @@ import type {
   AdminProviderCreditOrderList,
 } from "@/types"
 import { AdminCsvExportDialog } from "@/components/admin/admin-csv-export-dialog"
+import { CheckoutSnapshotView } from "@/components/admin/checkout-snapshot-view"
 import { useAdminUser } from "@/providers/admin-provider"
 import { Button } from "@/components/ui/button"
 import {
@@ -277,6 +278,11 @@ export default function AdminAdCreditsPage() {
                       <div className="text-xs text-gray-500">
                         {order.provider_email}
                       </div>
+                      <CheckoutSnapshotView
+                        snapshot={order.checkout_snapshot}
+                        compact
+                        className="mt-1"
+                      />
                     </td>
                     <td className="px-4 py-3 text-gray-700">{order.pack_id}</td>
                     <td className="px-4 py-3">
@@ -340,6 +346,11 @@ export default function AdminAdCreditsPage() {
                     <p className="text-xs text-gray-500">
                       {order.provider_email}
                     </p>
+                    <CheckoutSnapshotView
+                      snapshot={order.checkout_snapshot}
+                      compact
+                      className="mt-1"
+                    />
                   </div>
                   <span
                     className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${statusStyle(order.status)}`}

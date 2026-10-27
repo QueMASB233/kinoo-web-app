@@ -14,6 +14,7 @@ import type {
   AdminSubscriptionContract,
   AdminSubscriptionContractDetail,
 } from "@/types"
+import { CheckoutSnapshotView } from "@/components/admin/checkout-snapshot-view"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -193,6 +194,11 @@ export default function AdminSubscriptionContractsPage() {
                     <TableCell className="text-sm">
                       <div className="font-medium text-gray-900">{row.user_name}</div>
                       <div className="text-xs text-gray-500">{row.user_email}</div>
+                      <CheckoutSnapshotView
+                        snapshot={row.checkout_snapshot}
+                        compact
+                        className="mt-1"
+                      />
                     </TableCell>
                     <TableCell className="text-sm">
                       {row.interval === "yearly" ? "Anual" : "Mensual"}
@@ -233,12 +239,15 @@ export default function AdminSubscriptionContractsPage() {
                         ) : detail.charges.length === 0 ? (
                           <p className="py-3 text-sm text-gray-500">Sin cargos.</p>
                         ) : (
+                          <div className="space-y-3 py-2">
+                            <CheckoutSnapshotView snapshot={detail.checkout_snapshot} />
                           <Table>
                             <TableHeader>
                               <TableRow>
                                 <TableHead className="text-xs">Tipo</TableHead>
                                 <TableHead className="text-xs">Estado</TableHead>
                                 <TableHead className="text-xs">Monto</TableHead>
+                                <TableHead className="text-xs">Facturación</TableHead>
                                 <TableHead className="text-xs">Transaction ID</TableHead>
                                 <TableHead className="text-xs">Authorization Code</TableHead>
                                 <TableHead className="text-xs" />
@@ -255,6 +264,12 @@ export default function AdminSubscriptionContractsPage() {
                                   </TableCell>
                                   <TableCell className="text-sm">
                                     USD {money(charge.amount_usd)}
+                                  </TableCell>
+                                  <TableCell className="text-xs">
+                                    <CheckoutSnapshotView
+                                      snapshot={charge.checkout_snapshot}
+                                      compact
+                                    />
                                   </TableCell>
                                   <TableCell className="font-mono text-xs">
                                     {charge.nuvei_transaction_id || "—"}
@@ -282,6 +297,7 @@ export default function AdminSubscriptionContractsPage() {
                               ))}
                             </TableBody>
                           </Table>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>

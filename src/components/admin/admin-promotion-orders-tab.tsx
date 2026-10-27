@@ -22,6 +22,7 @@ import {
   PROMOTION_PAID_ORDER_STATUS_LABELS,
 } from "@/lib/constants"
 import type { AdminPromotionPaidOrderListItem } from "@/types"
+import { CheckoutSnapshotView } from "@/components/admin/checkout-snapshot-view"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -361,6 +362,11 @@ export function AdminPromotionOrdersTab({
                       <div className="text-xs text-gray-500">
                         {item.buyer_email}
                       </div>
+                      <CheckoutSnapshotView
+                        snapshot={item.checkout_snapshot}
+                        compact
+                        className="mt-1"
+                      />
                     </td>
                     <td className="px-4 py-3 font-medium">
                       ${Number(item.amount_usd).toFixed(2)}

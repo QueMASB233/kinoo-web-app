@@ -8,6 +8,7 @@ import { adminApi } from "@/lib/admin-api"
 import { ApiError } from "@/lib/api-client"
 import { ADMIN_FILTER_INPUT_CLASS } from "@/lib/constants"
 import type { AdminSubscriptionContract, AdminSubscriptionNote } from "@/types"
+import { CheckoutSnapshotView } from "@/components/admin/checkout-snapshot-view"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -191,6 +192,11 @@ export default function ActiveSubscriptionsPage() {
                     <TableCell>
                       <div className="font-medium text-gray-900">{row.user_name}</div>
                       <div className="text-xs text-gray-500">{row.user_email}</div>
+                      <CheckoutSnapshotView
+                        snapshot={row.checkout_snapshot}
+                        compact
+                        className="mt-1"
+                      />
                     </TableCell>
                     <TableCell className="text-sm text-gray-700">
                       {row.promotion_title}
