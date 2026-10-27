@@ -1073,15 +1073,22 @@ export interface AdminCreateProviderResponse {
   welcome_email_sent: boolean
 }
 
-export type TeamRoleCode = "operator_igs" | "operator"
+/** Roles que se pueden crear desde Equipo (no incluye admin). */
+export type TeamCreateRoleCode = "operator_igs" | "operator"
+/** @deprecated Preferir TeamCreateRoleCode; se mantiene por compat. */
+export type TeamRoleCode = TeamCreateRoleCode
+/** Roles visibles en el listado de Equipo. */
+export type TeamListRoleCode = "admin" | "operator_igs" | "operator"
+export type TeamRoleGroupFilter = "all" | "admins" | "operators"
 
 export interface AdminTeamListItem {
   id: string
   full_name: string
   email: string
-  role_code: TeamRoleCode
+  role_code: TeamListRoleCode
   role_label: string
   status_code: "active" | "blocked" | "suspended"
+  email_verified: boolean
   account_activated: boolean
   created_at: string | null
 }
@@ -1096,7 +1103,7 @@ export interface AdminTeamList {
 export interface AdminCreateTeamMemberRequest {
   full_name: string
   email: string
-  role_code: TeamRoleCode
+  role_code: TeamCreateRoleCode
 }
 
 export interface AdminCreateTeamMemberResponse extends AdminTeamListItem {

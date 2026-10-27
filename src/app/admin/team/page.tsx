@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { adminApi } from "@/lib/admin-api"
 import { AdminTeamTable } from "@/components/admin/admin-team-table"
-import type { AdminTeamListItem } from "@/types"
+import type { AdminTeamListItem, TeamRoleGroupFilter } from "@/types"
 
 const PAGE_SIZE = 50
 
@@ -11,6 +11,7 @@ export default function AdminTeamPage() {
   const [members, setMembers] = useState<AdminTeamListItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [roleGroup, setRoleGroup] = useState<TeamRoleGroupFilter>("all")
   const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(true)
@@ -24,6 +25,7 @@ export default function AdminTeamPage() {
         page,
         limit: PAGE_SIZE,
         search: searchQuery || undefined,
+        role_group: roleGroup === "all" ? undefined : roleGroup,
       })
       setMembers(data.items)
       setTotal(data.total)
@@ -32,11 +34,28 @@ export default function AdminTeamPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [page, searchQuery])
+  }, [page, searchQuery, roleGroup])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  function handleRoleGroupChange(next: TeamRoleGroupFilter) {
+    setRoleGroup(next)
+    setPage(1)
+  }
+
+  function handleSearch() {
+    setSearchQuery(searchInput.trim())
+    setPage(1)
+  }
+
+  function handleReset() {
+    setSearchInput("")
+    setSearchQuery("")
+    setRoleGroup("all")
+    setPage(1)
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
@@ -45,10 +64,14 @@ export default function AdminTeamPage() {
       <div>
         <h1 className="text-xl font-semibold text-gray-900">Equipo</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Operador IGS revisa suscripciones de Kynoo Pet Care, notas y créditos
-          de emergencia. Operador consulta compras, órdenes, reservas, canjes y
-          créditos de emergencia, sin editarlos.
-          {total > 0 ? <span className="text-gray-400"> · {total} en total</span> : null}
+          Cuentas con acceso al panel:{" "}
+          <span className="font-medium text-violet-700">Administradores</span>,{" "}
+          <span className="font-medium text-amber-800">Operador IGS</span> y{" "}
+          <span className="font-medium text-sky-700">Operador</span>. Desde aquí
+          solo puedes dar de alta operadores; los admins se listan para consulta.
+          {total > 0 ? (
+            <span className="text-gray-400"> · {total} en total</span>
+          ) : null}
         </p>
       </div>
 
@@ -61,22 +84,18 @@ export default function AdminTeamPage() {
       <AdminTeamTable
         members={members}
         isLoading={isLoading}
+        roleGroup={roleGroup}
+        onRoleGroupChange={handleRoleGroupChange}
         searchInput={searchInput}
         onSearchInputChange={setSearchInput}
-        onSearch={() => {
-          setSearchQuery(searchInput.trim())
-          setPage(1)
-        }}
-        onReset={() => {
-          setSearchInput("")
-          setSearchQuery("")
-          setPage(1)
-        }}
-        hasActiveFilters={Boolean(searchQuery)}
+        onSearch={handleSearch}
+        onReset={handleReset}
+        hasActiveFilters={Boolean(searchQuery) || roleGroup !== "all"}
         onReload={() => void load()}
         page={page}
         total={total}
         totalPages={totalPages}
+        pageSize={PAGE_SIZE}
         onPageChange={setPage}
       />
     </div>

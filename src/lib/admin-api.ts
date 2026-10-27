@@ -94,8 +94,12 @@ export const adminApi = {
   },
 
   team: {
-    list: (params?: { search?: string; page?: number; limit?: number }) =>
-      apiClient<AdminTeamList>(`/admin/team${buildQuery(params || {})}`),
+    list: (params?: {
+      search?: string
+      role_group?: "all" | "admins" | "operators"
+      page?: number
+      limit?: number
+    }) => apiClient<AdminTeamList>(`/admin/team${buildQuery(params || {})}`),
 
     create: (data: AdminCreateTeamMemberRequest) =>
       apiClient<AdminCreateTeamMemberResponse>("/admin/team", {
