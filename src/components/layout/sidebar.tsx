@@ -69,60 +69,58 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="hidden md:flex md:w-[240px] md:flex-col md:fixed md:inset-y-0 z-30">
-      <div className="flex flex-col flex-1 bg-white border-r border-border/60">
-        {/* Logo */}
-        <div className="flex h-14 items-center gap-2 px-5">
-          <Link
-            href={ROUTES.DASHBOARD}
-            className="flex items-center"
-            aria-label="KYNOO — Inicio"
-          >
-            <KynooLogo height={26} />
-          </Link>
-          <span className="text-[10px] font-medium uppercase tracking-wider text-white bg-[#3f0068] px-1.5 py-0.5 rounded">
-            Proveedor
-          </span>
+    <aside className="fixed inset-y-0 left-0 z-30 hidden h-dvh max-h-dvh w-[240px] flex-col overflow-hidden border-r border-border/60 bg-white md:flex">
+      {/* Logo — fijo arriba */}
+      <div className="flex h-14 shrink-0 items-center gap-2 px-5">
+        <Link
+          href={ROUTES.DASHBOARD}
+          className="flex items-center"
+          aria-label="KYNOO — Inicio"
+        >
+          <KynooLogo height={26} />
+        </Link>
+        <span className="rounded bg-[#3f0068] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white">
+          Proveedor
+        </span>
+      </div>
+
+      <Separator className="shrink-0" />
+
+      {/* Navigation — única zona con scroll */}
+      <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain px-3 py-3">
+        {navItems.map((item) => {
+          const active = isActive(item.href, item.exact)
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                active
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+              )}
+            >
+              <item.icon className="h-4 w-4 shrink-0" />
+              {item.label}
+            </Link>
+          )
+        })}
+      </nav>
+
+      {/* Powered by + Logout — fijo abajo */}
+      <div className="mt-auto shrink-0 space-y-3 border-t border-border/60 p-3">
+        <div className="flex justify-center px-1">
+          <PoweredByEleva />
         </div>
-
-        <Separator />
-
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-3 space-y-0.5">
-          {navItems.map((item) => {
-            const active = isActive(item.href, item.exact)
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                )}
-              >
-                <item.icon className="h-4 w-4 flex-shrink-0" />
-                {item.label}
-              </Link>
-            )
-          })}
-        </nav>
-
-        {/* Powered by + Logout */}
-        <div className="space-y-3 border-t border-border/60 p-3">
-          <div className="flex justify-center px-1">
-            <PoweredByEleva />
-          </div>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-muted-foreground hover:text-destructive"
-            onClick={logout}
-          >
-            <LogOut className="mr-3 h-4 w-4" />
-            Cerrar sesión
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-muted-foreground hover:text-destructive"
+          onClick={logout}
+        >
+          <LogOut className="mr-3 h-4 w-4" />
+          Cerrar sesión
+        </Button>
       </div>
     </aside>
   )

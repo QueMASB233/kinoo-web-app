@@ -163,9 +163,9 @@ export function AdminSidebar({
     pathname === href || pathname.startsWith(`${href}/`)
 
   const sidebarContent = (
-    <div className="flex h-full flex-col">
-      {/* Logo */}
-      <div className="flex h-14 items-center gap-2 border-b border-gray-200 px-5">
+    <>
+      {/* Logo — fijo arriba */}
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-gray-200 px-5">
         <Link href={homeHref} aria-label="KYNOO">
           <KynooLogo height={26} />
         </Link>
@@ -174,8 +174,8 @@ export function AdminSidebar({
         </span>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      {/* Navigation — única zona con scroll */}
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-3 py-4">
         {visibleItems.map((item) => (
           <Link
             key={item.href}
@@ -199,8 +199,8 @@ export function AdminSidebar({
         ))}
       </nav>
 
-      {/* Powered by + User + Logout */}
-      <div className="space-y-3 border-t border-gray-200 p-4">
+      {/* Powered by + User + Logout — fijo abajo */}
+      <div className="mt-auto shrink-0 space-y-3 border-t border-gray-200 p-4">
         <div className="flex justify-center">
           <PoweredByEleva />
         </div>
@@ -222,7 +222,7 @@ export function AdminSidebar({
           </button>
         </div>
       </div>
-    </div>
+    </>
   )
 
   return (
@@ -247,10 +247,10 @@ export function AdminSidebar({
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar: logo fijo arriba, nav con scroll, pie fijo abajo */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-[240px] border-r border-gray-200 bg-white transition-transform md:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex h-dvh max-h-dvh w-[240px] flex-col overflow-hidden border-r border-gray-200 bg-white transition-transform md:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
