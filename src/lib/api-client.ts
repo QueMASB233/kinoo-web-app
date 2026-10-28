@@ -301,6 +301,7 @@ export const api = {
       if (photo) form.append("photo", photo)
       if (video) form.append("video", video)
       if (videoThumbnail) form.append("video_thumbnail", videoThumbnail)
+      // Galería: post-create 1×1 vía api.productMedia (D23 / Fase 8).
       if (video) {
         return apiUploadWithProgress<import("@/types").Promotion>(
           "/admin/promotions",
@@ -388,6 +389,24 @@ export const api = {
       apiClient<void>(`/promotions/${promotionId}/locations/${locationId}`, {
         method: "DELETE",
       }),
+  },
+
+  /** Galería producto: 1 foto por request post-create (D23). */
+  productMedia: {
+    add: async (promotionId: string, file: File) => {
+      await ensureFreshAccessToken()
+      const form = new FormData()
+      form.append("file", file)
+      return apiClient<import("@/types").ProductMediaItem>(
+        `/admin/promotions/${promotionId}/product-media`,
+        { method: "POST", body: form },
+      )
+    },
+    remove: (promotionId: string, mediaId: string) =>
+      apiClient<void>(
+        `/admin/promotions/${promotionId}/product-media/${mediaId}`,
+        { method: "DELETE" },
+      ),
   },
 
   pets: {
@@ -523,5 +542,45 @@ export const api = {
         },
       )
     },
+  },
+
+  productOrders: {
+    list: (
+      limit = 25,
+      offset = 0,
+      status?: string,
+      shippingStatus?: string,
+      search?: string,
+      dateFrom?: string,
+      dateTo?: string,
+    ) => {
+      const params = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+      })
+      if (status) params.set("order_status", status)
+      if (shippingStatus) params.set("shipping_status", shippingStatus)
+      if (search?.trim()) params.set("search", search.trim())
+      if (dateFrom) params.set("date_from", dateFrom)
+      if (dateTo) params.set("date_to", dateTo)
+      return apiClient<import("@/types").ProductOrderListResponse>(
+        `/provider/product-orders?${params.toString()}`,
+      )
+    },
+    get: (orderId: string) =>
+      apiClient<import("@/types").ProductOrder>(
+        `/provider/product-orders/${orderId}`,
+      ),
+    updateShipping: (
+      orderId: string,
+      shippingStatus: "pending" | "shipped" | "delivered",
+    ) =>
+      apiClient<import("@/types").ProductOrder>(
+        `/provider/product-orders/${orderId}/shipping`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ shipping_status: shippingStatus }),
+        },
+      ),
   },
 }

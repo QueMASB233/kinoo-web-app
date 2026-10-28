@@ -662,4 +662,42 @@ export const adminApi = {
         { method: "POST", body: JSON.stringify(data) },
       ),
   },
+
+  productOrders: {
+    list: (params: {
+      limit?: number
+      offset?: number
+      status?: string
+      shipping_status?: string
+      search?: string
+      date_from?: string
+      date_to?: string
+    }) =>
+      apiClient<import("@/types").AdminProductOrderList>(
+        `/admin/product-orders${buildQuery(params)}`,
+      ),
+
+    get: (orderId: string) =>
+      apiClient<import("@/types").AdminProductOrderSummary>(
+        `/admin/product-orders/${orderId}`,
+      ),
+
+    updateShipping: (
+      orderId: string,
+      shippingStatus: "pending" | "shipped" | "delivered",
+    ) =>
+      apiClient<import("@/types").ProductOrder>(
+        `/admin/product-orders/${orderId}/shipping`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ shipping_status: shippingStatus }),
+        },
+      ),
+
+    refund: (orderId: string, data: { reason: string }) =>
+      apiClient<import("@/types").AdminProductOrderRefundResponse>(
+        `/admin/product-orders/${orderId}/refund`,
+        { method: "POST", body: JSON.stringify(data) },
+      ),
+  },
 }

@@ -15,6 +15,7 @@ import {
   BookOpen,
   Wallet,
   PackageCheck,
+  Package,
   Building2,
   UserRound,
   Users,
@@ -133,6 +134,12 @@ export function AdminSidebar({
       label: "Servicios",
       href: ROUTES.ADMIN_PROMOTION_FULFILLMENTS,
       badge: pendingFulfillmentCount,
+      roles: ["admin", "operator"],
+    },
+    {
+      icon: Package,
+      label: "Órdenes producto",
+      href: ROUTES.ADMIN_PRODUCT_ORDERS,
       roles: ["admin", "operator"],
     },
     {

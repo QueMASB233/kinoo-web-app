@@ -183,7 +183,35 @@ export function PromotionsTable({
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {promo.type === "service" ? (
+                    {promo.type === "product" ? (
+                      promo.product?.price_usd != null &&
+                      Number(promo.product.price_usd) > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          <Badge
+                            variant="outline"
+                            className="text-xs font-normal tabular-nums bg-sky-50 text-sky-700 border-sky-200"
+                          >
+                            {Number(promo.product.price_usd).toLocaleString(
+                              "es-EC",
+                              { style: "currency", currency: "USD" },
+                            )}
+                          </Badge>
+                          {promo.product.stock_total != null && (
+                            <span className="text-[11px] text-muted-foreground">
+                              Stock {promo.product.stock_remaining ?? 0}/
+                              {promo.product.stock_total}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className="text-xs font-normal bg-slate-50 text-slate-600 border-slate-200"
+                        >
+                          Sin precio
+                        </Badge>
+                      )
+                    ) : promo.type === "service" ? (
                       promo.service_price != null &&
                       Number(promo.service_price) > 0 ? (
                         <Badge

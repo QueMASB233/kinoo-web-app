@@ -1,6 +1,6 @@
 // ─── Enums ───────────────────────────────────────────────
 
-export type PromotionType = "promotion" | "service" | "subscription"
+export type PromotionType = "promotion" | "service" | "subscription" | "product"
 export type PromotionStatus = "active" | "inactive" | "pending_review" | "rejected"
 export type BenefitType =
   | "discount"
@@ -8,6 +8,29 @@ export type BenefitType =
   | "service"
   | "points_only"
   | "subscription"
+  | "product"
+
+export interface ProductMediaItem {
+  id?: string
+  media_type?: "image" | "video"
+  url: string
+  thumbnail_url?: string | null
+  sort_order?: number
+  created_at?: string
+}
+
+export interface ProductCommerce {
+  id?: string
+  promotion_id?: string
+  provider_id?: string | null
+  price_usd: number | string
+  currency?: string
+  stock_total?: number | null
+  stock_remaining?: number | null
+  media?: ProductMediaItem[]
+  created_at?: string
+  updated_at?: string
+}
 
 // ─── Auth ────────────────────────────────────────────────
 
@@ -86,6 +109,18 @@ export interface CheckoutIdentityPayload {
   billing?: BillingProfileUpsert | null
 }
 
+/** Snapshot de dirección de envío congelado en órdenes de producto. */
+export interface ShippingSnapshot {
+  shipping_address_id?: string | null
+  recipient_name?: string | null
+  recipient_phone_e164?: string | null
+  country_code?: string | null
+  province?: string | null
+  city?: string | null
+  address_line?: string | null
+  reference?: string | null
+}
+
 /** Snapshot congelado en órdenes (shape §5.4). */
 export interface CheckoutSnapshot {
   phone_e164?: string | null
@@ -97,7 +132,7 @@ export interface CheckoutSnapshot {
     billing_email?: string | null
     billing_address_line?: string | null
   } | null
-  shipping?: Record<string, unknown> | null
+  shipping?: ShippingSnapshot | null
 }
 
 export type PromotionNotificationDispatchStatus = "queued" | "skipped"
@@ -187,6 +222,8 @@ export interface Promotion {
   /** Precios de Kynoo Pet Care. Ausentes en promociones y servicios. */
   monthly_price?: string | number | null
   yearly_price?: string | number | null
+  /** Comercio SKU (type=product). */
+  product?: ProductCommerce | null
   /** Presente en revisión pendiente (admin). */
   locations?: PromotionLocation[] | null
   /** Solo en POST review: si el blast de zona se encoló o se omitió. */
@@ -316,6 +353,13 @@ export interface CreatePromotionRequest {
   /** Solo type subscription. Mayor a 0. Basta uno de los dos. */
   monthly_price?: number | null
   yearly_price?: number | null
+  /** Solo type=product. Precio/stock/galería (URLs). */
+  product?: {
+    price_usd: number
+    currency?: string
+    stock_total?: number | null
+    media?: ProductMediaItem[]
+  } | null
 }
 
 export interface UpdatePromotionRequest {
@@ -360,6 +404,13 @@ export interface UpdatePromotionRequest {
   /** Solo type subscription. Si se omite, el intervalo ya publicado se mantiene. */
   monthly_price?: number | null
   yearly_price?: number | null
+  /** Solo type=product. Galería: usar api.productMedia (1×1). No enviar media aquí. */
+  product?: {
+    price_usd: number
+    currency?: string
+    stock_total?: number | null
+    media?: ProductMediaItem[]
+  } | null
 }
 
 // ─── Places & Locations ─────────────────────────────────
@@ -1252,4 +1303,100 @@ export interface AdminKynooRedemptionList {
   total: number
   page: number
   limit: number
+}
+
+// ─── Physical product orders (panel) ─────────────────────
+
+export type ProductOrderStatus =
+  | "pending"
+  | "processing"
+  | "paid"
+  | "failed"
+  | "cancelled"
+  | "expired"
+  | "refunded"
+
+export type ProductShippingStatus = "pending" | "shipped" | "delivered"
+
+export interface ProductOrder {
+  id: string
+  product_id: string
+  promotion_id: string
+  provider_id: string | null
+  buyer_user_id: string
+  amount_usd: number | string
+  currency: string
+  status: ProductOrderStatus
+  shipping_status: ProductShippingStatus | null
+  shipped_at: string | null
+  delivered_at: string | null
+  nuvei_reference?: string | null
+  nuvei_transaction_id?: string | null
+  paid_at: string | null
+  buyer_full_name?: string | null
+  buyer_email?: string | null
+  buyer_phone?: string | null
+  product_title_snapshot: string
+  product_cover_url_snapshot?: string | null
+  price_usd_snapshot: number | string
+  publisher_type_snapshot?: string | null
+  notes?: string | null
+  checkout_snapshot?: CheckoutSnapshot | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ProductOrderListResponse {
+  items: ProductOrder[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface AdminProductOrderSummary {
+  id: string
+  status: ProductOrderStatus
+  shipping_status: ProductShippingStatus | null
+  amount_usd: number | string
+  currency: string
+  nuvei_transaction_id?: string | null
+  product_title_snapshot: string
+  buyer_full_name?: string | null
+  buyer_email?: string | null
+  buyer_phone?: string | null
+  paid_at: string | null
+  shipped_at: string | null
+  delivered_at: string | null
+  refundable: boolean
+  checkout_snapshot?: CheckoutSnapshot | null
+  provider_id?: string | null
+}
+
+export interface AdminProductOrderListItem extends AdminProductOrderSummary {
+  provider_name: string
+  provider_email: string
+  publisher_type_snapshot?: string | null
+  created_at: string
+}
+
+export interface AdminProductOrderList {
+  items: AdminProductOrderListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface AdminProductOrderRefundResponse {
+  id: string
+  status: ProductOrderStatus
+  amount_usd: number | string
+  currency: string
+  nuvei_transaction_id?: string | null
+  product_title_snapshot: string
+  buyer_full_name?: string | null
+  buyer_email?: string | null
+  refund_reason: string
+  stock_restored: boolean
+  shipping_status_at_refund?: ProductShippingStatus | null
+  message: string
 }

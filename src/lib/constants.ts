@@ -12,6 +12,8 @@ export const ROUTES = {
   CREDITS: "/dashboard/credits",
   RESERVATIONS: "/dashboard/reservations",
   RESERVATION_DETAIL: (id: string) => `/dashboard/reservations/${id}`,
+  PRODUCT_ORDERS: "/dashboard/product-orders",
+  PRODUCT_ORDER_DETAIL: (id: string) => `/dashboard/product-orders/${id}`,
   ADMIN_DASHBOARD: "/admin/dashboard",
   ADMIN_REVIEW: "/admin/review",
   ADMIN_AUDIT_LOGS: "/admin/audit-logs",
@@ -19,6 +21,7 @@ export const ROUTES = {
   ADMIN_EMERGENCY_CREDITS: "/admin/emergency-credits",
   ADMIN_AD_CREDITS: "/admin/ad-credits",
   ADMIN_PROMOTION_FULFILLMENTS: "/admin/promotion-fulfillments",
+  ADMIN_PRODUCT_ORDERS: "/admin/product-orders",
   ADMIN_ACTIVE_SUBSCRIPTIONS: "/admin/active-subscriptions",
   ADMIN_KYNOO_REDEMPTIONS: "/admin/kynoo-redemptions",
   ADMIN_PUBLICATIONS: "/admin/publications",
@@ -88,6 +91,7 @@ export const BENEFIT_TYPE_LABELS: Record<string, string> = {
   service: "Servicio",
   points_only: "Solo Puntos KYNOO",
   subscription: "Kynoo Pet Care",
+  product: "Producto físico",
 }
 
 /** Tipos de beneficio permitidos según el tipo de publicación. */
@@ -95,6 +99,7 @@ export const BENEFIT_TYPES_BY_PUBLICATION_TYPE = {
   promotion: ["discount", "free_product", "points_only"],
   service: ["service"],
   subscription: ["subscription"],
+  product: ["product"],
 } as const
 
 export type PublicationType = keyof typeof BENEFIT_TYPES_BY_PUBLICATION_TYPE
@@ -127,6 +132,7 @@ export const PROMOTION_TYPE_LABELS: Record<string, string> = {
   promotion: "Promoción",
   service: "Servicio",
   subscription: "Suscripción",
+  product: "Producto",
 }
 
 export const CREDIT_ORDER_STATUS_LABELS: Record<string, string> = {

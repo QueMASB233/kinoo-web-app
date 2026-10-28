@@ -28,6 +28,7 @@ import {
   PlusCircle,
   Wallet,
   CalendarCheck,
+  Package,
 } from "lucide-react"
 import { KynooLogo } from "@/components/brand/kynoo-logo"
 import { PoweredByEleva } from "@/components/brand/powered-by-eleva"
@@ -36,6 +37,7 @@ const mobileNavItems = [
   { label: "Inicio", href: ROUTES.DASHBOARD, icon: LayoutDashboard, exact: true },
   { label: "Mis Promociones", href: ROUTES.PROMOTIONS, icon: Megaphone },
   { label: "Reservas", href: ROUTES.RESERVATIONS, icon: CalendarCheck },
+  { label: "Envíos", href: ROUTES.PRODUCT_ORDERS, icon: Package },
   { label: "Publicar", href: ROUTES.NEW_PROMOTION, icon: PlusCircle },
   { label: "Créditos", href: ROUTES.CREDITS, icon: Wallet },
   { label: "Perfil", href: ROUTES.PROFILE, icon: User },
@@ -46,6 +48,7 @@ function getPageTitle(pathname: string): string {
   if (pathname === ROUTES.NEW_PROMOTION) return "Nueva Publicación"
   if (pathname.startsWith(ROUTES.PROMOTIONS)) return "Promociones"
   if (pathname.startsWith(ROUTES.RESERVATIONS)) return "Reservas"
+  if (pathname.startsWith(ROUTES.PRODUCT_ORDERS)) return "Envíos"
   if (pathname === ROUTES.CREDITS) return "Créditos"
   if (pathname === ROUTES.PROFILE) return "Perfil"
   return "Panel Proveedor"

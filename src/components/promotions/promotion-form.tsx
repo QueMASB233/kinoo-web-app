@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -53,6 +53,7 @@ import {
   sanitizeUserFilters,
 } from "./user-targeting-section"
 import { LocationPicker } from "./location-picker"
+import { ProductGalleryPicker } from "./product-gallery-picker"
 import { PromotionAudienceManager } from "@/components/admin/promotion-audience-manager"
 import { PromotionImageUpload } from "./promotion-image-upload"
 import { PromotionVideoUpload } from "./promotion-video-upload"
@@ -109,91 +110,136 @@ const PUBLICATION_TYPE_COPY = {
     title: "Suscripción",
     description: "Kynoo Pet Care. Mensual, anual o ambos",
   },
+  product: {
+    title: "Producto",
+    description: "Producto físico con precio, stock y galería",
+  },
 } as const
 
 // ─── Schema ──────────────────────────────────────────────
 
-const formSchema = z
-  .object({
-    type: z.enum(["promotion", "service", "subscription"]),
-    title: z.string().min(3, "Mínimo 3 caracteres").max(255),
-    description: z.string().optional(),
-    benefit_type: z.enum([
-      "discount",
-      "free_product",
-      "service",
-      "points_only",
-      "subscription",
-    ]),
-    monthly_price: z.string().optional(),
-    yearly_price: z.string().optional(),
-  link: z
-    .string()
-    .refine((val) => val === "" || val.startsWith("https://"), {
-      message: "La URL debe comenzar con https://",
+function buildFormSchema(isAdmin: boolean) {
+  return z
+    .object({
+      type: z.enum(["promotion", "service", "subscription", "product"]),
+      title: z.string().min(3, "Mínimo 3 caracteres").max(255),
+      description: z.string().optional(),
+      benefit_type: z.enum([
+        "discount",
+        "free_product",
+        "service",
+        "points_only",
+        "subscription",
+        "product",
+      ]),
+      monthly_price: z.string().optional(),
+      yearly_price: z.string().optional(),
+      product_price: z.string().optional(),
+      link: z
+        .string()
+        .refine((val) => val === "" || val.startsWith("https://"), {
+          message: "La URL debe comenzar con https://",
+        })
+        .optional(),
+      coupon_code: z.string().optional(),
+      redeem_message: z.string().optional(),
+      is_referral_only: z.boolean(),
+      min_referral_points_required: z.coerce.number().min(0),
+      points_cost: z.coerce.number().min(0),
+      is_single_use_per_user: z.boolean(),
+      has_limited_stock: z.boolean(),
+      stock_total: z.coerce.number().min(0).optional(),
+      start_date: z.date(),
+      end_date: z.date(),
+      is_active: z.boolean(),
+      is_featured_eligible: z.boolean(),
+      business_name: z.string().optional(),
+      business_address: z.string().optional(),
+      business_phone: z.string().optional(),
+      business_email: z.string().optional(),
+      business_whatsapp: z.string().optional(),
+      service_price: z.coerce.number().min(0).optional(),
+      is_presential: z.boolean(),
     })
-    .optional(),
-  coupon_code: z.string().optional(),
-  redeem_message: z.string().optional(),
-  is_referral_only: z.boolean(),
-  min_referral_points_required: z.coerce.number().min(0),
-  points_cost: z.coerce.number().min(0),
-  is_single_use_per_user: z.boolean(),
-  has_limited_stock: z.boolean(),
-  stock_total: z.coerce.number().min(0).optional(),
-  start_date: z.date(),
-  end_date: z.date(),
-  is_active: z.boolean(),
-  is_featured_eligible: z.boolean(),
-  // Service fields
-  business_name: z.string().optional(),
-  business_address: z.string().optional(),
-  business_phone: z.string().optional(),
-  business_email: z.string().optional(),
-  business_whatsapp: z.string().optional(),
-  service_price: z.coerce.number().min(0).optional(),
-  is_presential: z.boolean(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.type === "subscription") {
-      const monthly = parseOptionalPrice(data.monthly_price)
-      const yearly = parseOptionalPrice(data.yearly_price)
-      if (Number.isNaN(monthly)) {
+    .superRefine((data, ctx) => {
+      if (data.type === "subscription") {
+        const monthly = parseOptionalPrice(data.monthly_price)
+        const yearly = parseOptionalPrice(data.yearly_price)
+        if (Number.isNaN(monthly)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["monthly_price"],
+            message: "Usa un monto mayor a 0, con hasta 2 decimales",
+          })
+        }
+        if (Number.isNaN(yearly)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["yearly_price"],
+            message: "Usa un monto mayor a 0, con hasta 2 decimales",
+          })
+        }
+        if (monthly == null && yearly == null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["monthly_price"],
+            message: "Indica el precio mensual, el anual o ambos",
+          })
+        }
+        return
+      }
+      if (data.type === "product") {
+        const price = parseOptionalPrice(data.product_price)
+        if (price == null || Number.isNaN(price)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["product_price"],
+            message: "Indica el precio del producto (mayor a 0)",
+          })
+        }
+        const phone = (data.business_phone || "").trim()
+        const whatsapp = (data.business_whatsapp || "").trim()
+        const name = (data.business_name || "").trim()
+        if (isAdmin) {
+          if (!phone) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["business_phone"],
+              message: "Indica el teléfono de contacto KYNOO",
+            })
+          }
+        } else {
+          if (!name) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["business_name"],
+              message: "Indica el nombre del negocio",
+            })
+          }
+          if (!phone && !whatsapp) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["business_phone"],
+              message: "Indica teléfono o WhatsApp de contacto",
+            })
+          }
+        }
+        return
+      }
+      if (!isBenefitAllowedForPublication(data.type, data.benefit_type)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["monthly_price"],
-          message: "Usa un monto mayor a 0, con hasta 2 decimales",
+          path: ["benefit_type"],
+          message:
+            data.type === "promotion"
+              ? 'Las promociones no pueden tener "Servicio" como tipo de beneficio'
+              : 'Los servicios deben tener "Servicio" como tipo de beneficio',
         })
       }
-      if (Number.isNaN(yearly)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["yearly_price"],
-          message: "Usa un monto mayor a 0, con hasta 2 decimales",
-        })
-      }
-      if (monthly == null && yearly == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["monthly_price"],
-          message: "Indica el precio mensual, el anual o ambos",
-        })
-      }
-      return
-    }
-    if (!isBenefitAllowedForPublication(data.type, data.benefit_type)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["benefit_type"],
-        message:
-          data.type === "promotion"
-            ? 'Las promociones no pueden tener "Servicio" como tipo de beneficio'
-            : 'Los servicios deben tener "Servicio" como tipo de beneficio',
-      })
-    }
-  })
+    })
+}
 
-type FormValues = z.infer<typeof formSchema>
+type FormValues = z.infer<ReturnType<typeof buildFormSchema>>
 
 const IMAGE_UPLOAD_ERROR_TITLES = new Set([
   "Imagen no permitida",
@@ -278,6 +324,7 @@ export function PromotionForm({
       (initialData?.targeting?.user_filters as UserFilters | undefined) || {},
   )
 
+  const formSchema = useMemo(() => buildFormSchema(isAdmin), [isAdmin])
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: initialData
@@ -288,6 +335,7 @@ export function PromotionForm({
           benefit_type: initialData.benefit_type,
           monthly_price: formatPriceInput(initialData.monthly_price),
           yearly_price: formatPriceInput(initialData.yearly_price),
+          product_price: formatPriceInput(initialData.product?.price_usd),
           link: initialData.link || "",
           coupon_code: initialData.coupon_code || "",
           redeem_message: initialData.redeem_message || "",
@@ -298,8 +346,14 @@ export function PromotionForm({
               : 0,
           points_cost: initialData.points_cost ?? 0,
           is_single_use_per_user: initialData.is_single_use_per_user,
-          has_limited_stock: initialData.stock_total != null,
-          stock_total: initialData.stock_total ?? undefined,
+          has_limited_stock:
+            initialData.type === "product"
+              ? initialData.product?.stock_total != null
+              : initialData.stock_total != null,
+          stock_total:
+            initialData.type === "product"
+              ? (initialData.product?.stock_total ?? undefined)
+              : (initialData.stock_total ?? undefined),
           start_date: new Date(initialData.start_date),
           end_date: new Date(initialData.end_date),
           is_active: initialData.is_active,
@@ -319,6 +373,7 @@ export function PromotionForm({
           benefit_type: "discount" as BenefitType,
           monthly_price: "",
           yearly_price: "",
+          product_price: "",
           link: "",
           coupon_code: "",
           redeem_message: "",
@@ -355,6 +410,12 @@ export function PromotionForm({
     if (watchType === "subscription") {
       if (watchBenefitType !== "subscription") {
         form.setValue("benefit_type", "subscription")
+      }
+      return
+    }
+    if (watchType === "product") {
+      if (watchBenefitType !== "product") {
+        form.setValue("benefit_type", "product")
       }
       return
     }
@@ -489,11 +550,13 @@ export function PromotionForm({
       mode === "edit" && initialData ? initialData.type : values.type
     const isService = publicationType === "service"
     const isSubscription = publicationType === "subscription"
-    const pointsCost = isService
-      ? 0
-      : Math.max(0, Math.floor(Number(values.points_cost) || 0))
+    const isProduct = publicationType === "product"
+    const pointsCost =
+      isService || isProduct
+        ? 0
+        : Math.max(0, Math.floor(Number(values.points_cost) || 0))
     const minReferralPoints =
-      isService || !values.is_referral_only
+      isService || isProduct || !values.is_referral_only
         ? 0
         : Math.max(0, Math.floor(Number(values.min_referral_points_required) || 0))
     const monthlyPrice = isSubscription
@@ -502,12 +565,24 @@ export function PromotionForm({
     const yearlyPrice = isSubscription
       ? parseOptionalPrice(values.yearly_price)
       : null
+    const productPrice = isProduct
+      ? parseOptionalPrice(values.product_price)
+      : null
+    const productStock = isProduct
+      ? values.has_limited_stock
+        ? (values.stock_total ?? null)
+        : null
+      : null
 
     const payload = {
       type: publicationType,
       title: values.title,
       description: values.description || null,
-      benefit_type: isSubscription ? "subscription" : values.benefit_type,
+      benefit_type: isSubscription
+        ? "subscription"
+        : isProduct
+          ? "product"
+          : values.benefit_type,
       media_type: mediaType,
       image_url: imageUrl,
       link: values.link || null,
@@ -515,12 +590,16 @@ export function PromotionForm({
       redeem_message: values.redeem_message || null,
       points_required: 0,
       points_cost: pointsCost,
-      is_referral_only: Boolean(values.is_referral_only),
+      is_referral_only: isProduct ? false : Boolean(values.is_referral_only),
       min_referral_points_required: minReferralPoints,
-      is_single_use_per_user: isSubscription
+      is_single_use_per_user: isSubscription || isProduct
         ? false
         : values.is_single_use_per_user,
-      stock_total: values.has_limited_stock ? (values.stock_total ?? null) : null,
+      stock_total: isProduct
+        ? null
+        : values.has_limited_stock
+          ? (values.stock_total ?? null)
+          : null,
       start_date: values.start_date.toISOString(),
       end_date: values.end_date.toISOString(),
       is_active: values.is_active,
@@ -533,7 +612,7 @@ export function PromotionForm({
       business_phone: values.business_phone || null,
       business_email: values.business_email || null,
       business_whatsapp: values.business_whatsapp || null,
-      service_price: values.service_price ?? null,
+      service_price: isProduct ? null : (values.service_price ?? null),
       is_presential: values.is_presential,
       ...(isAdmin && mode === "create" ? { audience_mode: audienceMode } : {}),
       ...(isSubscription &&
@@ -543,6 +622,16 @@ export function PromotionForm({
         : {}),
       ...(isSubscription && yearlyPrice != null && !Number.isNaN(yearlyPrice)
         ? { yearly_price: yearlyPrice }
+        : {}),
+      ...(isProduct && productPrice != null && !Number.isNaN(productPrice)
+        ? {
+            product: {
+              price_usd: productPrice,
+              currency: "USD",
+              stock_total: productStock,
+              // Galería se gestiona 1×1 post-create (D23); no enviar media aquí.
+            },
+          }
         : {}),
       ...(mediaType === "image" && mode === "edit" ? { clear_video: true } : {}),
       ...(mediaType === "video" &&
@@ -574,10 +663,14 @@ export function PromotionForm({
         toast({
           title: isAdmin ? "Publicación KYNOO publicada" : "Publicación creada",
           description: !isAdmin
-            ? "Ahora agrega las ubicaciones. Cuando el admin apruebe, se avisará a los usuarios de esa zona. Ten todos los puntos listos."
+            ? isProduct
+              ? "Ahora puedes agregar ubicaciones y las fotos de la galería."
+              : "Ahora agrega las ubicaciones. Cuando el admin apruebe, se avisará a los usuarios de esa zona. Ten todos los puntos listos."
             : audienceMode === "list"
               ? "Ya está activa, pero nadie la verá hasta que cargues la lista de usuarios."
-              : "Ya está activa. Agrega las ubicaciones para que los usuarios de esa zona la vean.",
+              : isProduct
+                ? "Ya está activa. Agrega ubicaciones y las fotos de la galería."
+                : "Ya está activa. Agrega las ubicaciones para que los usuarios de esa zona la vean.",
         })
         router.push(editRoute(created.id))
         return
@@ -753,15 +846,19 @@ export function PromotionForm({
           <CardTitle className="text-sm font-semibold">Tipo de publicación</CardTitle>
           <CardDescription className="text-xs">
             {isAdmin
-              ? "Promoción, servicio o suscripción Kynoo Pet Care"
-              : "Elige si quieres publicar una promoción o un servicio"}
+              ? "Promoción, servicio, producto o suscripción Kynoo Pet Care"
+              : "Promoción, servicio o producto físico"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+          <div
+            className={`grid gap-3 ${
+              isAdmin ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3"
+            }`}
+          >
             {(isAdmin
-              ? (["promotion", "service", "subscription"] as const)
-              : (["promotion", "service"] as const)
+              ? (["promotion", "service", "product", "subscription"] as const)
+              : (["promotion", "service", "product"] as const)
             ).map((t) => {
               const isSelected = watchType === t
               const isLocked = mode === "edit"
@@ -780,6 +877,10 @@ export function PromotionForm({
                       form.setValue("is_referral_only", false)
                     } else if (t === "subscription") {
                       form.setValue("benefit_type", "subscription")
+                    } else if (t === "product") {
+                      form.setValue("benefit_type", "product")
+                      form.setValue("points_cost", 0)
+                      form.setValue("is_referral_only", false)
                     } else if (form.getValues("benefit_type") === "service") {
                       form.setValue("benefit_type", "discount")
                     }
@@ -848,6 +949,16 @@ export function PromotionForm({
               </p>
               <p className="text-xs text-emerald-800">
                 No se elige un beneficio. Esta ficha no se canjea ni se abre como servicio.
+              </p>
+            </div>
+          ) : watchType === "product" ? (
+            <div className="space-y-1 rounded-md border border-sky-200 bg-sky-50 px-3 py-2">
+              <p className="text-xs font-medium text-sky-900">
+                Producto físico
+              </p>
+              <p className="text-xs text-sky-800">
+                Se vende con checkout Nuvei y datos de envío. El precio y la
+                galería van en el bloque de comercio.
               </p>
             </div>
           ) : (
@@ -1264,6 +1375,11 @@ export function PromotionForm({
               Cada persona puede tener un contrato vigente de esta ficha. Cuando
               ese periodo termina, puede contratar de nuevo si queda cupo.
             </p>
+          ) : watchType === "product" ? (
+            <p className="text-xs text-muted-foreground">
+              Cada compra es de una unidad. El inventario se gestiona en el bloque
+              de comercio del producto.
+            </p>
           ) : (
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
@@ -1285,6 +1401,57 @@ export function PromotionForm({
         </CardContent>
       </Card>
 
+      {watchType === "product" && (
+        <Card className="border-border/60">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold">
+              Comercio del producto
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Precio propio del producto y galería para la app.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="product_price" className="text-xs font-medium">
+                Precio (USD) *
+              </Label>
+              <Input
+                id="product_price"
+                inputMode="decimal"
+                placeholder="19.99"
+                {...form.register("product_price")}
+                className="h-9 w-[200px]"
+              />
+              {form.formState.errors.product_price && (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.product_price.message}
+                </p>
+              )}
+            </div>
+
+            {mode === "edit" && initialData ? (
+              <ProductGalleryPicker
+                promotionId={initialData.id}
+                initialMedia={initialData.product?.media}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-border py-6 text-center space-y-2">
+                <div className="rounded-full bg-muted p-2.5">
+                  <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium">
+                  Guarda la publicación primero
+                </p>
+                <p className="text-xs text-muted-foreground px-4">
+                  Luego podrás agregar las fotos de la galería.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stock */}
       <Card className="border-border/60">
         <CardHeader className="pb-3">
@@ -1297,7 +1464,9 @@ export function PromotionForm({
               <p className="text-xs text-muted-foreground">
                 {watchType === "subscription"
                   ? "Limitar la cantidad de contratos. El cupo baja en el primer cobro y se libera cuando el contrato termina."
-                  : "Limitar la cantidad de canjes disponibles"}
+                  : watchType === "product"
+                    ? "Limitar unidades disponibles a la venta"
+                    : "Limitar la cantidad de canjes disponibles"}
               </p>
             </div>
             <Switch
@@ -1426,15 +1595,19 @@ export function PromotionForm({
         <PetTargetingSection value={petFilters} onChange={setPetFilters} />
       </div>
 
-      {/* Service-specific fields */}
-      {watchType === "service" && (
+      {/* Datos del publicador — servicio y producto (D21) */}
+      {(watchType === "service" || watchType === "product") && (
         <Card className="border-border/60">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold">
               Datos del negocio
             </CardTitle>
             <CardDescription className="text-xs">
-              Información visible para los usuarios del servicio
+              {watchType === "product"
+                ? isAdmin
+                  ? "Contacto KYNOO visible al comprador. El teléfono es obligatorio."
+                  : "Información visible al comprador. Nombre y teléfono o WhatsApp son obligatorios."
+                : "Información visible para los usuarios del servicio"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1442,6 +1615,7 @@ export function PromotionForm({
               <div className="space-y-2">
                 <Label htmlFor="business_name" className="text-xs font-medium">
                   Nombre del negocio
+                  {watchType === "product" ? " *" : ""}
                 </Label>
                 <Input
                   id="business_name"
@@ -1449,6 +1623,11 @@ export function PromotionForm({
                   placeholder="Mi Negocio"
                   className="h-9"
                 />
+                {form.formState.errors.business_name ? (
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.business_name.message}
+                  </p>
+                ) : null}
               </div>
             )}
 
@@ -1467,14 +1646,19 @@ export function PromotionForm({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="business_phone" className="text-xs font-medium">
-                  Teléfono
+                  Teléfono{watchType === "product" ? " *" : ""}
                 </Label>
                 <Input
                   id="business_phone"
                   {...form.register("business_phone")}
-                  placeholder="+1234567890"
+                  placeholder="+593..."
                   className="h-9"
                 />
+                {form.formState.errors.business_phone ? (
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.business_phone.message}
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label
@@ -1482,15 +1666,21 @@ export function PromotionForm({
                   className="text-xs font-medium"
                 >
                   WhatsApp
+                  {watchType === "product" && !isAdmin ? " *" : ""}
                 </Label>
                 <Input
                   id="business_whatsapp"
                   {...form.register("business_whatsapp")}
-                  placeholder="+1234567890"
+                  placeholder="+593..."
                   className="h-9"
                 />
               </div>
             </div>
+            {watchType === "product" && !isAdmin ? (
+              <p className="text-xs text-muted-foreground">
+                Basta con teléfono o WhatsApp (al menos uno).
+              </p>
+            ) : null}
 
             <div className="space-y-2">
               <Label htmlFor="business_email" className="text-xs font-medium">
@@ -1505,29 +1695,33 @@ export function PromotionForm({
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="service_price" className="text-xs font-medium">
-                  Precio del servicio
-                </Label>
-                <Input
-                  id="service_price"
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  {...form.register("service_price")}
-                  placeholder="0.00"
-                  className="h-9"
-                />
+            {watchType === "service" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="service_price" className="text-xs font-medium">
+                    Precio del servicio
+                  </Label>
+                  <Input
+                    id="service_price"
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    {...form.register("service_price")}
+                    placeholder="0.00"
+                    className="h-9"
+                  />
+                </div>
+                <div className="flex items-center justify-between pt-6">
+                  <Label className="text-xs font-medium">
+                    Servicio presencial
+                  </Label>
+                  <Switch
+                    checked={form.watch("is_presential")}
+                    onCheckedChange={(v) => form.setValue("is_presential", v)}
+                  />
+                </div>
               </div>
-              <div className="flex items-center justify-between pt-6">
-                <Label className="text-xs font-medium">Servicio presencial</Label>
-                <Switch
-                  checked={form.watch("is_presential")}
-                  onCheckedChange={(v) => form.setValue("is_presential", v)}
-                />
-              </div>
-            </div>
+            ) : null}
           </CardContent>
         </Card>
       )}

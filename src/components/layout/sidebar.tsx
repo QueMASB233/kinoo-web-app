@@ -13,6 +13,7 @@ import {
   Wallet,
   LogOut,
   CalendarCheck,
+  Package,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -35,6 +36,11 @@ const navItems = [
     label: "Reservas",
     href: ROUTES.RESERVATIONS,
     icon: CalendarCheck,
+  },
+  {
+    label: "Envíos",
+    href: ROUTES.PRODUCT_ORDERS,
+    icon: Package,
   },
   {
     label: "Publicar",

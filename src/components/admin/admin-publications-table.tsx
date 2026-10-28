@@ -39,6 +39,7 @@ const TYPE_FILTER_OPTIONS: { value: TypeFilter; label: string }[] = [
   { value: "all", label: "Todos los tipos" },
   { value: "promotion", label: PROMOTION_TYPE_LABELS.promotion },
   { value: "service", label: PROMOTION_TYPE_LABELS.service },
+  { value: "product", label: PROMOTION_TYPE_LABELS.product },
   { value: "subscription", label: PROMOTION_TYPE_LABELS.subscription },
 ]
 
