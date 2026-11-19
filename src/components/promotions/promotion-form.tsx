@@ -64,7 +64,16 @@ import {
   PromotionTagsInput,
   normalizePromotionTag,
 } from "./promotion-tags-input"
-import { Loader2, ArrowLeft, Info, MapPin, ImageIcon, Film } from "lucide-react"
+import {
+  Loader2,
+  ArrowLeft,
+  Info,
+  MapPin,
+  ImageIcon,
+  Film,
+  Plus,
+  Trash2,
+} from "lucide-react"
 import { KynooAllyIcon } from "./kynoo-ally-marker"
 import type {
   Promotion,
@@ -132,6 +141,24 @@ const TITLE_PLACEHOLDER_BY_TYPE: Record<PromotionType, string> = {
 const DESCRIPTION_PLACEHOLDER =
   "Qué ofreces y para qué mascota. Evita solo eslóganes: Kynoo usa este texto para recomendarte en el chat."
 
+/** Máx. URLs de información (copy CTA fijo en app). Alineado al backend. */
+const INFO_LINKS_MAX = 5
+
+function normalizeInfoLinksInput(raw?: string[] | null): string[] {
+  if (!Array.isArray(raw)) return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (typeof item !== "string") continue
+    const url = item.trim()
+    if (!url || seen.has(url)) continue
+    seen.add(url)
+    out.push(url)
+    if (out.length >= INFO_LINKS_MAX) break
+  }
+  return out
+}
+
 // ─── Schema ──────────────────────────────────────────────
 
 function buildFormSchema(isAdmin: boolean) {
@@ -164,6 +191,9 @@ function buildFormSchema(isAdmin: boolean) {
           message: "La URL debe comenzar con https://",
         })
         .optional(),
+      info_links: z
+        .array(z.string())
+        .max(INFO_LINKS_MAX, `Máximo ${INFO_LINKS_MAX} enlaces`),
       coupon_code: z.string().optional(),
       redeem_message: z.string().optional(),
       is_referral_only: z.boolean(),
@@ -272,6 +302,26 @@ function buildFormSchema(isAdmin: boolean) {
           message: "Agrega al menos una etiqueta (ej. baño, alimento, cama)",
         })
       }
+
+      const links = data.info_links || []
+      if (links.length > INFO_LINKS_MAX) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["info_links"],
+          message: `Máximo ${INFO_LINKS_MAX} enlaces`,
+        })
+      }
+      links.forEach((raw, index) => {
+        const url = (raw || "").trim()
+        if (!url) return
+        if (!url.startsWith("https://")) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["info_links", index],
+            message: "La URL debe comenzar con https://",
+          })
+        }
+      })
     })
 }
 
@@ -376,6 +426,7 @@ export function PromotionForm({
           yearly_price: formatPriceInput(initialData.yearly_price),
           product_price: formatPriceInput(initialData.product?.price_usd),
           link: initialData.link || "",
+          info_links: normalizeInfoLinksInput(initialData.info_links),
           coupon_code: initialData.coupon_code || "",
           redeem_message: initialData.redeem_message || "",
           is_referral_only: initialData.is_referral_only,
@@ -416,6 +467,7 @@ export function PromotionForm({
           yearly_price: "",
           product_price: "",
           link: "",
+          info_links: [],
           coupon_code: "",
           redeem_message: "",
           is_referral_only: false,
@@ -446,8 +498,36 @@ export function PromotionForm({
   const watchIsKynooAlly = form.watch("is_kynoo_ally")
   const watchMinReferralPoints = form.watch("min_referral_points_required")
   const watchPointsCost = form.watch("points_cost")
+  const watchInfoLinks = form.watch("info_links") || []
   const canBeKynooAlly =
     watchType === "promotion" || watchType === "service"
+
+  function setInfoLinkAt(index: number, value: string) {
+    const next = [...(form.getValues("info_links") || [])]
+    next[index] = value
+    form.setValue("info_links", next, {
+      shouldDirty: true,
+      shouldValidate: true,
+    })
+  }
+
+  function addInfoLink() {
+    const current = form.getValues("info_links") || []
+    if (current.length >= INFO_LINKS_MAX) return
+    form.setValue("info_links", [...current, ""], {
+      shouldDirty: true,
+      shouldValidate: true,
+    })
+  }
+
+  function removeInfoLinkAt(index: number) {
+    const current = form.getValues("info_links") || []
+    form.setValue(
+      "info_links",
+      current.filter((_, i) => i !== index),
+      { shouldDirty: true, shouldValidate: true },
+    )
+  }
 
   const allowedBenefitTypes = BENEFIT_TYPES_BY_PUBLICATION_TYPE[watchType]
 
@@ -640,6 +720,7 @@ export function PromotionForm({
       media_type: mediaType,
       image_url: imageUrl,
       link: values.link || null,
+      info_links: normalizeInfoLinksInput(values.info_links),
       coupon_code: values.coupon_code || null,
       redeem_message: values.redeem_message || null,
       points_required: 0,
@@ -1003,6 +1084,87 @@ export function PromotionForm({
               placeholder={DESCRIPTION_PLACEHOLDER}
               rows={3}
             />
+          </div>
+
+          {/* Enlaces de información (debajo de descripción; independiente de canje) */}
+          <div className="space-y-3 rounded-md border border-border/60 p-3">
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">
+                Enlaces de información
+              </Label>
+              <p className="text-[11px] text-muted-foreground">
+                Opcional. En la app aparecen debajo de la descripción con el
+                texto fijo «Encuentra más información aquí». Solo URLs https.
+              </p>
+            </div>
+            {watchInfoLinks.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Sin enlaces. La app no mostrará el bloque.
+              </p>
+            ) : (
+              watchInfoLinks.map((url, index) => {
+                const fieldError =
+                  form.formState.errors.info_links?.[index] &&
+                  typeof form.formState.errors.info_links[index] === "object" &&
+                  "message" in
+                    (form.formState.errors.info_links[index] as object)
+                    ? String(
+                        (
+                          form.formState.errors.info_links[index] as {
+                            message?: string
+                          }
+                        ).message || "",
+                      )
+                    : null
+                return (
+                  <div key={`info-link-${index}`} className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id={`info_link_${index}`}
+                        value={url}
+                        onChange={(e) => setInfoLinkAt(index, e.target.value)}
+                        placeholder="https://..."
+                        className="h-9"
+                        disabled={isSubmitting}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 shrink-0"
+                        onClick={() => removeInfoLinkAt(index)}
+                        disabled={isSubmitting}
+                        aria-label="Quitar enlace"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {fieldError ? (
+                      <p className="text-xs text-destructive">{fieldError}</p>
+                    ) : null}
+                  </div>
+                )
+              })
+            )}
+            {typeof form.formState.errors.info_links?.message === "string" ? (
+              <p className="text-xs text-destructive">
+                {form.formState.errors.info_links.message}
+              </p>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={addInfoLink}
+              disabled={isSubmitting || watchInfoLinks.length >= INFO_LINKS_MAX}
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Agregar enlace
+              {watchInfoLinks.length > 0
+                ? ` (${watchInfoLinks.length}/${INFO_LINKS_MAX})`
+                : ""}
+            </Button>
           </div>
 
           <PromotionTagsInput

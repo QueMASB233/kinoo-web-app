@@ -470,6 +470,29 @@ function ReviewCard({
             </a>
           )}
 
+          {Array.isArray(promo.info_links) && promo.info_links.length > 0 ? (
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium text-gray-500">
+                Enlaces de información
+              </p>
+              <ul className="space-y-1">
+                {promo.info_links.map((url) => (
+                  <li key={url}>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline break-all"
+                    >
+                      <ExternalLink className="h-3 w-3 shrink-0" />
+                      {url}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           {promo.targeting &&
             Object.keys(promo.targeting).length > 0 && (
               <details className="text-xs">

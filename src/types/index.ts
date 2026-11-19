@@ -181,6 +181,12 @@ export interface Promotion {
   video_mime?: string | null
   video_thumbnail_url?: string | null
   link: string | null
+  /**
+   * URLs https de información extra (landing, beneficios, …).
+   * Independiente de `link`. Ausente o [] = sin bloque en app.
+   * Copy CTA fijo en app: “Encuentra más información aquí”.
+   */
+  info_links?: string[]
   coupon_code: string | null
   redeem_message: string
   points_required: number
@@ -337,6 +343,8 @@ export interface CreatePromotionRequest {
   /** image | video — exclusivo (XOR). Default image. */
   media_type?: "image" | "video"
   link?: string | null
+  /** URLs https de info. Máx. 5. Independiente de `link`. */
+  info_links?: string[]
   coupon_code?: string | null
   redeem_message?: string | null
   points_required?: number
@@ -391,6 +399,8 @@ export interface UpdatePromotionRequest {
   /** Quita solo la miniatura del video (independiente de image_url). */
   clear_video_thumbnail?: boolean
   link?: string | null
+  /** Si se envía, reemplaza. [] = quitar todos. */
+  info_links?: string[] | null
   coupon_code?: string | null
   redeem_message?: string | null
   points_required?: number | null
