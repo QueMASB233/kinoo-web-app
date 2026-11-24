@@ -647,6 +647,8 @@ export interface ActiveCreditUser {
   deactivated_at: string | null
   call_initiated_at?: string | null
   close_reason?: string | null
+  expires_at?: string | null
+  is_valid?: boolean
   amount_usd?: number | null
   paid_at?: string | null
   order_id?: string | null

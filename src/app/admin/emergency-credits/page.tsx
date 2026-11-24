@@ -25,12 +25,14 @@ const STATUS_STYLES: Record<string, string> = {
   active: "bg-emerald-50 text-emerald-700",
   calling: "bg-amber-50 text-amber-800",
   inactive: "bg-gray-100 text-gray-600",
+  expired: "bg-red-50 text-red-700",
 }
 
 const STATUS_LABELS: Record<string, string> = {
   active: "Listo para llamar",
   calling: "En atención",
   inactive: "Cerrado",
+  expired: "Vencido",
 }
 
 const CLOSE_REASON_LABELS: Record<string, string> = {
@@ -39,11 +41,23 @@ const CLOSE_REASON_LABELS: Record<string, string> = {
   manual: "Manual",
 }
 
-function statusStyle(status: string) {
+function statusStyle(status: string, isValid?: boolean) {
+  if (
+    (status === "active" || status === "calling") &&
+    isValid === false
+  ) {
+    return STATUS_STYLES.expired
+  }
   return STATUS_STYLES[status] || "bg-gray-100 text-gray-600"
 }
 
-function statusLabel(status: string) {
+function statusLabel(status: string, isValid?: boolean) {
+  if (
+    (status === "active" || status === "calling") &&
+    isValid === false
+  ) {
+    return STATUS_LABELS.expired
+  }
   return STATUS_LABELS[status] || status
 }
 
@@ -213,6 +227,8 @@ export default function EmergencyCreditsPage() {
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
         <strong>En atención</strong> = el usuario pulsó Llamar.
+        {" "}Cobertura de <strong>12 meses</strong> desde el pago (1 llamada).
+        {" "}<strong>Vencido</strong> = pasó la fecha aunque el estado en BD siga abierto.
         {readOnly
           ? " Esta consulta es de solo lectura."
           : " Cierra el caso cuando hayas atendido la emergencia o libera el crédito si no hubo contacto."}
@@ -241,6 +257,7 @@ export default function EmergencyCreditsPage() {
               <option value="">Todos</option>
               <option value="calling">En atención</option>
               <option value="active">Listos para llamar</option>
+              <option value="expired">Vencidos</option>
               <option value="inactive">Cerrados</option>
             </select>
           </div>
@@ -292,6 +309,9 @@ export default function EmergencyCreditsPage() {
                       Estado
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Válido hasta
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
                       Llamada iniciada
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
@@ -321,10 +341,13 @@ export default function EmergencyCreditsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span
-                          className={`rounded px-2 py-0.5 text-xs font-medium ${statusStyle(credit.status)}`}
+                          className={`rounded px-2 py-0.5 text-xs font-medium ${statusStyle(credit.status, credit.is_valid)}`}
                         >
-                          {statusLabel(credit.status)}
+                          {statusLabel(credit.status, credit.is_valid)}
                         </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-600">
+                        {formatDt(credit.expires_at)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-600">
                         {formatDt(credit.call_initiated_at)}
@@ -384,12 +407,15 @@ export default function EmergencyCreditsPage() {
                       </p>
                     </div>
                     <span
-                      className={`rounded px-2 py-0.5 text-xs font-medium ${statusStyle(credit.status)}`}
+                      className={`rounded px-2 py-0.5 text-xs font-medium ${statusStyle(credit.status, credit.is_valid)}`}
                     >
-                      {statusLabel(credit.status)}
+                      {statusLabel(credit.status, credit.is_valid)}
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                    {credit.expires_at && (
+                      <span>Válido hasta: {formatDt(credit.expires_at)}</span>
+                    )}
                     {credit.call_initiated_at && (
                       <span>Llamada: {formatDt(credit.call_initiated_at)}</span>
                     )}
