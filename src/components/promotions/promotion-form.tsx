@@ -12,7 +12,6 @@ import {
   isBenefitAllowedForPublication,
   KYNOO_POINTS_BRAND,
   KYNOO_PUBLISHER_NAME,
-  PROMOTION_AUDIENCE_MODE_LABELS,
   ROUTES,
 } from "@/lib/constants"
 import { useToast } from "@/hooks/use-toast"
@@ -54,7 +53,15 @@ import {
 } from "./user-targeting-section"
 import { LocationPicker } from "./location-picker"
 import { ProductGalleryPicker } from "./product-gallery-picker"
+import { AudienceModePicker } from "./audience-mode-picker"
+import { ProviderAudienceEditor } from "./provider-audience-editor"
 import { PromotionAudienceManager } from "@/components/admin/promotion-audience-manager"
+import {
+  countryCreditsFromPricing,
+  DEFAULT_COUNTRY_CREDITS,
+  filterNationalCountries,
+  nationalCodesFromPricing,
+} from "@/lib/national-audience"
 import { PromotionImageUpload } from "./promotion-image-upload"
 import { PromotionVideoUpload } from "./promotion-video-upload"
 import { PROMOTION_VIDEO_MAX_DURATION_SECONDS } from "@/lib/promotion-video"
@@ -76,6 +83,7 @@ import {
 } from "lucide-react"
 import { KynooAllyIcon } from "./kynoo-ally-marker"
 import type {
+  Country,
   Promotion,
   PromotionAudienceMode,
   PromotionType,
@@ -382,6 +390,11 @@ export function PromotionForm({
   const [audienceMode, setAudienceMode] = useState<PromotionAudienceMode>(
     () => initialData?.audience_mode ?? "all",
   )
+  const [nationalCountryId, setNationalCountryId] = useState<string | null>(
+    () => initialData?.country_id ?? null,
+  )
+  const [nationalCountries, setNationalCountries] = useState<Country[]>([])
+  const [countryCredits, setCountryCredits] = useState(DEFAULT_COUNTRY_CREDITS)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
   const [imageRemoved, setImageRemoved] = useState(false)
@@ -501,6 +514,40 @@ export function PromotionForm({
   const watchInfoLinks = form.watch("info_links") || []
   const canBeKynooAlly =
     watchType === "promotion" || watchType === "service"
+  const isCountryAudience = audienceMode === "country"
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadNationalMeta() {
+      try {
+        const [countries, pricing] = await Promise.all([
+          api.lookup.countries(),
+          isAdmin
+            ? Promise.resolve(null)
+            : api.credits.locationPricing().catch(() => null),
+        ])
+        if (cancelled) return
+        const codes = nationalCodesFromPricing(pricing)
+        const filtered = filterNationalCountries(countries, codes)
+        setNationalCountries(filtered)
+        setCountryCredits(countryCreditsFromPricing(pricing))
+        setNationalCountryId((prev) => prev ?? filtered[0]?.id ?? null)
+      } catch {
+        if (!cancelled) setNationalCountries([])
+      }
+    }
+    void loadNationalMeta()
+    return () => {
+      cancelled = true
+    }
+  }, [isAdmin])
+
+  function handleAudienceModeChange(next: PromotionAudienceMode) {
+    setAudienceMode(next)
+    if (next === "country" && !nationalCountryId && nationalCountries[0]) {
+      setNationalCountryId(nationalCountries[0].id)
+    }
+  }
 
   function setInfoLinkAt(index: number, value: string) {
     const next = [...(form.getValues("info_links") || [])]
@@ -616,6 +663,20 @@ export function PromotionForm({
     setImageError(null)
     setVideoError(null)
     setVideoThumbError(null)
+
+    if (
+      mode === "create" &&
+      audienceMode === "country" &&
+      !nationalCountryId
+    ) {
+      toast({
+        variant: "destructive",
+        title: "País requerido",
+        description: "Elige el país para la audiencia Nacional.",
+      })
+      setIsSubmitting(false)
+      return
+    }
 
     const hasExistingVideo =
       mode === "edit" &&
@@ -743,7 +804,10 @@ export function PromotionForm({
         isService || publicationType === "promotion"
           ? Boolean(values.is_kynoo_ally)
           : false,
-      country_id: null,
+      country_id:
+        mode === "create" && audienceMode === "country"
+          ? nationalCountryId
+          : null,
       city_id: null,
       targeting,
       business_name: values.business_name || null,
@@ -753,7 +817,15 @@ export function PromotionForm({
       business_whatsapp: values.business_whatsapp || null,
       service_price: isProduct ? null : (values.service_price ?? null),
       is_presential: values.is_presential,
-      ...(isAdmin && mode === "create" ? { audience_mode: audienceMode } : {}),
+      ...(mode === "create"
+        ? {
+            audience_mode: isAdmin
+              ? audienceMode
+              : audienceMode === "country"
+                ? "country"
+                : "all",
+          }
+        : {}),
       ...(isSubscription &&
       monthlyPrice != null &&
       !Number.isNaN(monthlyPrice)
@@ -934,40 +1006,42 @@ export function PromotionForm({
             </div>
 
             {mode === "create" && (
-              <div className="space-y-2">
-                <Label className="text-xs font-medium">Audiencia</Label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  {(["all", "list"] as const).map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => setAudienceMode(option)}
-                      className={`flex-1 rounded-lg border-2 p-3 text-left transition-colors ${
-                        audienceMode === option
-                          ? "border-foreground bg-muted/50"
-                          : "border-border hover:border-muted-foreground/30"
-                      }`}
-                    >
-                      <p className="text-sm font-medium">
-                        {PROMOTION_AUDIENCE_MODE_LABELS[option]}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {option === "all"
-                          ? "La ven los usuarios cerca de sus ubicaciones, con la segmentación que elijas."
-                          : "Solo la ven los usuarios del CSV, estén donde estén. Las ubicaciones son opcionales."}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-                {audienceMode === "list" && (
-                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    Nadie verá esta publicación hasta que cargues la lista de
-                    usuarios. Después de publicarla podrás subir el CSV.
-                  </p>
-                )}
-              </div>
+              <AudienceModePicker
+                isAdmin
+                value={audienceMode}
+                onChange={handleAudienceModeChange}
+                countryId={nationalCountryId}
+                onCountryChange={setNationalCountryId}
+                nationalCountries={nationalCountries}
+                countryCredits={countryCredits}
+                disabled={isSubmitting}
+                options={["all", "list", "country"]}
+              />
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {!isAdmin && mode === "create" && (
+        <Card className="border-border/60">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold">Audiencia</CardTitle>
+            <CardDescription className="text-xs">
+              Elige si se muestra por zona (mapa) o a todo el país.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AudienceModePicker
+              isAdmin={false}
+              value={audienceMode === "list" ? "all" : audienceMode}
+              onChange={handleAudienceModeChange}
+              countryId={nationalCountryId}
+              onCountryChange={setNationalCountryId}
+              nationalCountries={nationalCountries}
+              countryCredits={countryCredits}
+              disabled={isSubmitting}
+              options={["all", "country"]}
+            />
           </CardContent>
         </Card>
       )}
@@ -976,6 +1050,16 @@ export function PromotionForm({
         <PromotionAudienceManager
           promotion={initialData}
           onAudienceChange={(nextMode) => setAudienceMode(nextMode)}
+        />
+      )}
+
+      {!isAdmin && mode === "edit" && initialData && (
+        <ProviderAudienceEditor
+          promotion={initialData}
+          onAudienceChange={(nextMode, nextCountryId) => {
+            setAudienceMode(nextMode)
+            setNationalCountryId(nextCountryId)
+          }}
         />
       )}
 
@@ -1758,50 +1842,65 @@ export function PromotionForm({
         </CardContent>
       </Card>
 
-      {/* Location — Geo-targeting via map */}
-      <Card className="border-border/60">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold">
-            Ubicación
-            {isAdmin && audienceMode === "list" && (
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                (opcional)
-              </span>
+      {/* Location — Geo-targeting via map (oculto en audiencia Nacional) */}
+      {!isCountryAudience && (
+        <Card className="border-border/60">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold">
+              Ubicación
+              {isAdmin && audienceMode === "list" && (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  (opcional)
+                </span>
+              )}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              {isAdmin && audienceMode === "list"
+                ? "En modo lista las ubicaciones no deciden quién la ve: la ven los usuarios del CSV estén donde estén."
+                : "Configura la ubicación para geo-targeting"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {mode === "edit" && initialData ? (
+              <LocationPicker
+                promotionId={initialData.id}
+                promotionType={initialData.type}
+                context={context}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-center space-y-3">
+                <div className="rounded-full bg-muted p-3">
+                  <MapPin className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">
+                    Guarda la publicación primero
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Después de crear la publicación podrás agregar ubicaciones en
+                    el mapa.
+                    {isAdmin
+                      ? " No consumen créditos."
+                      : " Ten todos los puntos listos: al aprobar, se avisará a los usuarios de esa zona."}
+                  </p>
+                </div>
+              </div>
             )}
-          </CardTitle>
-          <CardDescription className="text-xs">
-            {isAdmin && audienceMode === "list"
-              ? "En modo lista las ubicaciones no deciden quién la ve: la ven los usuarios del CSV estén donde estén."
-              : "Configura la ubicación para geo-targeting"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {mode === "edit" && initialData ? (
-            <LocationPicker
-              promotionId={initialData.id}
-              promotionType={initialData.type}
-              context={context}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center py-8 text-center space-y-3">
-              <div className="rounded-full bg-muted p-3">
-                <MapPin className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">
-                  Guarda la publicación primero
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Después de crear la publicación podrás agregar ubicaciones en el mapa.
-                  {isAdmin
-                    ? " No consumen créditos."
-                    : " Ten todos los puntos listos: al aprobar, se avisará a los usuarios de esa zona."}
-                </p>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
+
+      {isCountryAudience && (
+        <Card className="border-border/60">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold">Ubicación</CardTitle>
+            <CardDescription className="text-xs">
+              En audiencia Nacional no se usan pines en el mapa. La ven los
+              usuarios con ese país en su perfil.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
 
       {/* Targeting — user + pet filters */}
       <div className="space-y-3">

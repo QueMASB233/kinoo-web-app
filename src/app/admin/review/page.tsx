@@ -4,8 +4,12 @@ import { useEffect, useState } from "react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { adminApi } from "@/lib/admin-api"
-import { ApiError } from "@/lib/api-client"
-import { BENEFIT_TYPE_LABELS, PROMOTION_TYPE_LABELS } from "@/lib/constants"
+import { api, ApiError } from "@/lib/api-client"
+import {
+  BENEFIT_TYPE_LABELS,
+  PROMOTION_AUDIENCE_MODE_LABELS,
+  PROMOTION_TYPE_LABELS,
+} from "@/lib/constants"
 import { CITY_COVERAGE_LABEL, POINT_COVERAGE_LABEL } from "@/lib/geo-coverage"
 import { useAdminBadges } from "@/providers/admin-provider"
 import { AdminReviewLocationsMap } from "@/components/admin/admin-review-locations-map"
@@ -41,6 +45,7 @@ import {
   formatUsersNotifiedAt,
 } from "@/lib/promotion-notify"
 import type {
+  Country,
   Promotion,
   PromotionLocation,
   PromotionNotificationAudience,
@@ -166,18 +171,47 @@ function ReviewCard({
   const [audience, setAudience] =
     useState<PromotionNotificationAudience | null>(null)
   const [audienceLoading, setAudienceLoading] = useState(false)
+  const audienceMode = promo.audience_mode ?? "all"
+  const isCountryAudience = audienceMode === "country"
   const alreadyNotified = Boolean(promo.users_notified_at)
-  const [notifyZone, setNotifyZone] = useState(
-    !alreadyNotified && (promo.locations?.length ?? 0) > 0,
-  )
-  const [resendOpen, setResendOpen] = useState(false)
-
   const locations: PromotionLocation[] = promo.locations ?? []
   const locationCount = locations.length
   const hasLocations = locationCount > 0
+  const canNotifyOnApprove =
+    hasLocations || (isCountryAudience && Boolean(promo.country_id))
+  const [notifyZone, setNotifyZone] = useState(
+    !alreadyNotified && canNotifyOnApprove,
+  )
+  const [resendOpen, setResendOpen] = useState(false)
+  const [countryLabel, setCountryLabel] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!hasLocations) return
+    if (!isCountryAudience || !promo.country_id) {
+      setCountryLabel(null)
+      return
+    }
+    let cancelled = false
+    api.lookup
+      .countries()
+      .then((countries: Country[]) => {
+        if (cancelled) return
+        const match = countries.find((c) => c.id === promo.country_id)
+        setCountryLabel(
+          match
+            ? `${match.name}${match.code ? ` (${match.code})` : ""}`
+            : null,
+        )
+      })
+      .catch(() => {
+        if (!cancelled) setCountryLabel(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isCountryAudience, promo.country_id])
+
+  useEffect(() => {
+    if (!canNotifyOnApprove) return
     let cancelled = false
     setAudienceLoading(true)
     adminApi.promotionReview
@@ -194,7 +228,7 @@ function ReviewCard({
     return () => {
       cancelled = true
     }
-  }, [promo.id, hasLocations])
+  }, [promo.id, canNotifyOnApprove])
 
   async function handleApprove() {
     setProcessing("approve")
@@ -202,7 +236,7 @@ function ReviewCard({
     try {
       await adminApi.promotionReview.review(promo.id, {
         action: "approve",
-        notify: hasLocations && notifyZone,
+        notify: canNotifyOnApprove && notifyZone,
       })
       notifyPendingReviewProcessed()
       onRemove()
@@ -323,6 +357,14 @@ function ReviewCard({
               value={`${fmt(promo.start_date)} — ${fmt(promo.end_date)}`}
             />
             <Detail label="Creada" value={fmt(promo.created_at)} />
+            <Detail
+              label="Audiencia"
+              value={
+                isCountryAudience
+                  ? `Nacional${countryLabel ? ` · ${countryLabel}` : ""}`
+                  : PROMOTION_AUDIENCE_MODE_LABELS[audienceMode] || audienceMode
+              }
+            />
             {(promo.type === "promotion" || promo.type === "service") && (
               <Detail
                 label="Aliado Kynoo Pet Care"
@@ -335,11 +377,19 @@ function ReviewCard({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-gray-600">
-                  {hasLocations
-                    ? `${locationCount} ubicación${locationCount !== 1 ? "es" : ""}`
-                    : "Ubicaciones"}
+                  {isCountryAudience
+                    ? "Alcance"
+                    : hasLocations
+                      ? `${locationCount} ubicación${locationCount !== 1 ? "es" : ""}`
+                      : "Ubicaciones"}
                 </p>
-                {!hasLocations ? (
+                {isCountryAudience ? (
+                  <p className="mt-1 text-xs text-gray-700">
+                    Audiencia Nacional
+                    {countryLabel ? ` · ${countryLabel}` : ""}. Sin pines en el
+                    mapa.
+                  </p>
+                ) : !hasLocations ? (
                   <p className="mt-1 text-xs text-amber-700">
                     Sin ubicaciones — no se mostrará en la app aunque apruebes
                   </p>
@@ -366,24 +416,30 @@ function ReviewCard({
                   </ul>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => setMapOpen(true)}
-                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
-              >
-                <MapPin className="h-3.5 w-3.5" />
-                Ver en mapa
-              </button>
+              {!isCountryAudience && (
+                <button
+                  type="button"
+                  onClick={() => setMapOpen(true)}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  <MapPin className="h-3.5 w-3.5" />
+                  Ver en mapa
+                </button>
+              )}
             </div>
           </div>
 
           <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
             <p className="text-xs font-medium text-gray-600">
-              Notificación a la zona
+              {isCountryAudience
+                ? "Notificación al país"
+                : "Notificación a la zona"}
             </p>
-            {!hasLocations ? (
+            {!canNotifyOnApprove ? (
               <p className="text-xs text-amber-700">
-                Sin ubicaciones: no se enviará push aunque apruebes.
+                {isCountryAudience
+                  ? "Sin país configurado: no se enviará push aunque apruebes."
+                  : "Sin ubicaciones: no se enviará push aunque apruebes."}
               </p>
             ) : (
               <>
@@ -404,12 +460,16 @@ function ReviewCard({
                 ) : audience ? (
                   <p className="text-xs text-gray-600">
                     {notifyZone
-                      ? `Se notificará a ~${audience.eligible_count} usuario${
-                          audience.eligible_count === 1 ? "" : "s"
-                        } en el área de estos puntos (GPS reciente + segmentación + push activo).`
+                      ? isCountryAudience
+                        ? `Se notificará a ~${audience.eligible_count} usuario${
+                            audience.eligible_count === 1 ? "" : "s"
+                          } del país (perfil + segmentación + push activo).`
+                        : `Se notificará a ~${audience.eligible_count} usuario${
+                            audience.eligible_count === 1 ? "" : "s"
+                          } en el área de estos puntos (GPS reciente + segmentación + push activo).`
                       : `Audiencia actual: ~${audience.eligible_count} usuario${
                           audience.eligible_count === 1 ? "" : "s"
-                        } (GPS reciente + segmentación + push activo).`}
+                        }.`}
                   </p>
                 ) : (
                   <p className="text-xs text-gray-500">
@@ -425,7 +485,11 @@ function ReviewCard({
                     disabled={alreadyNotified && !notifyZone}
                     onChange={(e) => setNotifyZone(e.target.checked)}
                   />
-                  <span>Notificar a la zona al aprobar</span>
+                  <span>
+                    {isCountryAudience
+                      ? "Notificar al país al aprobar"
+                      : "Notificar a la zona al aprobar"}
+                  </span>
                 </label>
                 {alreadyNotified && !notifyZone && (
                   <div className="flex items-center gap-1.5">

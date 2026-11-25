@@ -13,8 +13,13 @@ import {
   Users,
 } from "lucide-react"
 import { adminApi } from "@/lib/admin-api"
-import { ApiError } from "@/lib/api-client"
+import { api, ApiError } from "@/lib/api-client"
 import { PROMOTION_AUDIENCE_MODE_LABELS } from "@/lib/constants"
+import {
+  countryCreditsFromPricing,
+  filterNationalCountries,
+  nationalCodesFromPricing,
+} from "@/lib/national-audience"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -39,6 +44,7 @@ import type {
   AudienceImportMode,
   AudienceImportReport,
   AudienceList,
+  Country,
   Promotion,
   PromotionAudienceMode,
 } from "@/types"
@@ -63,7 +69,12 @@ const IMPORT_MODE_HINTS: Record<AudienceImportMode, string> = {
   append: "Se suman los usuarios nuevos; los que ya estaban se mantienen.",
 }
 
-type PendingConfirm = "to_all" | "to_list_empty" | "clear" | null
+type PendingConfirm =
+  | "to_all"
+  | "to_list_empty"
+  | "to_country"
+  | "clear"
+  | null
 
 function formatDateTime(iso: string) {
   return format(new Date(iso), "dd MMM yyyy HH:mm", { locale: es })
@@ -114,12 +125,19 @@ export function PromotionAudienceManager({
   const [clearing, setClearing] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null)
+  const [nationalCountries, setNationalCountries] = useState<Country[]>([])
+  const [selectedCountryId, setSelectedCountryId] = useState<string | null>(
+    initialPromotion.country_id ?? null,
+  )
+  const [countryCredits, setCountryCredits] = useState(50)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const promotionId = promotion.id
   const mode: PromotionAudienceMode = promotion.audience_mode ?? "all"
   const total = audience?.total ?? promotion.audience_count ?? 0
   const busy = validating || applying || changingMode || clearing
+  const isListUi = mode === "list"
+  const isCountryUi = mode === "country"
 
   const loadAudience = useCallback(
     async (targetPage: number): Promise<AudienceList | null> => {
@@ -168,12 +186,47 @@ export function PromotionAudienceManager({
     if (showHistory && history == null) void loadHistory()
   }, [showHistory, history, loadHistory])
 
-  function syncAudience(nextMode: PromotionAudienceMode, count: number) {
+  useEffect(() => {
+    let cancelled = false
+    async function loadCountries() {
+      try {
+        const [countries, pricing] = await Promise.all([
+          api.lookup.countries(),
+          api.credits.locationPricing().catch(() => null),
+        ])
+        if (cancelled) return
+        const codes = nationalCodesFromPricing(pricing)
+        const filtered = filterNationalCountries(countries, codes)
+        setNationalCountries(filtered)
+        setCountryCredits(countryCreditsFromPricing(pricing))
+        setSelectedCountryId((prev) => prev ?? filtered[0]?.id ?? null)
+      } catch {
+        if (!cancelled) setNationalCountries([])
+      }
+    }
+    void loadCountries()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  function syncAudience(
+    nextMode: PromotionAudienceMode,
+    count: number,
+    nextCountryId?: string | null,
+  ) {
     setPromotion((prev) => ({
       ...prev,
       audience_mode: nextMode,
       audience_count: count,
+      country_id:
+        nextCountryId !== undefined
+          ? nextCountryId
+          : nextMode === "country"
+            ? prev.country_id
+            : null,
     }))
+    if (nextCountryId !== undefined) setSelectedCountryId(nextCountryId)
     onAudienceChange?.(nextMode, count)
   }
 
@@ -257,21 +310,51 @@ export function PromotionAudienceManager({
   function requestModeChange(next: PromotionAudienceMode) {
     if (next === mode) return
     if (next === "all") setPendingConfirm("to_all")
+    else if (next === "country") setPendingConfirm("to_country")
     else if (total === 0) setPendingConfirm("to_list_empty")
     else void applyModeChange(next)
   }
 
-  async function applyModeChange(next: PromotionAudienceMode) {
+  async function applyModeChange(
+    next: PromotionAudienceMode,
+    countryIdOverride?: string | null,
+  ) {
     setChangingMode(true)
     try {
-      const res = await adminApi.audience.setMode(promotionId, next)
-      syncAudience(res.audience_mode, res.audience_count)
+      const countryId =
+        next === "country"
+          ? countryIdOverride ?? selectedCountryId ?? nationalCountries[0]?.id
+          : null
+      if (next === "country" && !countryId) {
+        toast({
+          variant: "destructive",
+          title: "Sin país disponible",
+          description: "No hay países habilitados para audiencia nacional.",
+        })
+        return
+      }
+      const res = await adminApi.audience.setMode(
+        promotionId,
+        next,
+        countryId,
+      )
+      syncAudience(
+        res.audience_mode,
+        res.audience_count,
+        res.country_id ?? null,
+      )
+      const pins =
+        res.locations_removed && res.locations_removed > 0
+          ? ` Se eliminaron ${res.locations_removed} ubicación${res.locations_removed === 1 ? "" : "es"}.`
+          : ""
       toast({
         title: "Audiencia actualizada",
         description:
           res.audience_mode === "list"
             ? "Ahora solo la ven los usuarios de la lista."
-            : "Ahora la ven los usuarios de la zona, según sus ubicaciones.",
+            : res.audience_mode === "country"
+              ? `Ahora es Nacional.${pins}`
+              : "Ahora la ven los usuarios de la zona, según sus ubicaciones.",
       })
     } catch (err) {
       toast({
@@ -325,6 +408,7 @@ export function PromotionAudienceManager({
     setPendingConfirm(null)
     if (action === "to_all") void applyModeChange("all")
     else if (action === "to_list_empty") void applyModeChange("list")
+    else if (action === "to_country") void applyModeChange("country")
     else if (action === "clear") void clearAudience()
   }
 
@@ -343,6 +427,12 @@ export function PromotionAudienceManager({
       description:
         "La lista está vacía: nadie verá esta publicación hasta que subas un CSV.",
       action: "Pasar a modo lista",
+    },
+    to_country: {
+      title: "¿Cambiar a audiencia Nacional?",
+      description:
+        "Se eliminarán las ubicaciones del mapa y no se reembolsan los créditos de pines. KYNOO no consume créditos de audiencia nacional.",
+      action: "Confirmar Nacional",
     },
     clear: {
       title: "¿Vaciar la audiencia?",
@@ -367,14 +457,14 @@ export function PromotionAudienceManager({
       </CardHeader>
       <CardContent className="space-y-5">
         {/* Modo */}
-        <div className="flex flex-col gap-2 sm:flex-row">
-          {(["all", "list"] as const).map((option) => (
+        <div className="grid gap-2 sm:grid-cols-3">
+          {(["all", "list", "country"] as const).map((option) => (
             <button
               key={option}
               type="button"
               disabled={busy}
               onClick={() => requestModeChange(option)}
-              className={`flex-1 rounded-lg border-2 p-3 text-left transition-colors disabled:opacity-60 ${
+              className={`rounded-lg border-2 p-3 text-left transition-colors disabled:opacity-60 ${
                 mode === option
                   ? "border-foreground bg-muted/50"
                   : "border-border hover:border-muted-foreground/30"
@@ -389,13 +479,52 @@ export function PromotionAudienceManager({
               <p className="text-xs text-muted-foreground mt-1">
                 {option === "all"
                   ? "La ven los usuarios cerca de sus ubicaciones, con la segmentación elegida."
-                  : "Solo la ven, canjean o pagan los usuarios del CSV, estén donde estén."}
+                  : option === "list"
+                    ? "Solo la ven, canjean o pagan los usuarios del CSV, estén donde estén."
+                    : "La ven los usuarios con ese país en su perfil. Sin pines ni mapa."}
               </p>
             </button>
           ))}
         </div>
 
-        {mode === "list" && total === 0 && !loadingAudience && (
+        {isCountryUi && (
+          <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 p-3">
+            <Label htmlFor="admin-national-country" className="text-xs font-medium">
+              País
+            </Label>
+            {nationalCountries.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No hay países habilitados para audiencia nacional.
+              </p>
+            ) : (
+              <select
+                id="admin-national-country"
+                disabled={busy || nationalCountries.length === 1}
+                value={selectedCountryId ?? ""}
+                onChange={(e) => {
+                  const next = e.target.value || null
+                  if (!next || next === selectedCountryId) return
+                  setSelectedCountryId(next)
+                  void applyModeChange("country", next)
+                }}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {nationalCountries.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.code ? ` (${c.code})` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Sin costo de créditos para KYNOO. No se usan pines en el mapa
+              {countryCredits ? ` (proveedores: ${countryCredits} créditos).` : "."}
+            </p>
+          </div>
+        )}
+
+        {isListUi && total === 0 && !loadingAudience && (
           <p className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             Nadie verá esta publicación hasta que subas un CSV.
@@ -408,7 +537,8 @@ export function PromotionAudienceManager({
           </p>
         )}
 
-        {/* Resumen */}
+        {/* Resumen CSV — oculto en Nacional */}
+        {!isCountryUi && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
           <span className="inline-flex items-center gap-1.5">
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -428,8 +558,10 @@ export function PromotionAudienceManager({
             )}
           </span>
         </div>
+        )}
 
-        {/* Subir CSV */}
+        {/* Subir CSV — solo modo lista / all (lista inactiva) */}
+        {!isCountryUi && (
         <div className="space-y-3 rounded-lg border border-border/60 p-3">
           <div>
             <Label className="text-xs font-medium">Subir CSV</Label>
@@ -502,9 +634,10 @@ export function PromotionAudienceManager({
             />
           )}
         </div>
+        )}
 
         {/* Miembros */}
-        {audience && audience.items.length > 0 && (
+        {!isCountryUi && audience && audience.items.length > 0 && (
           <div className="space-y-2">
             <div className="overflow-x-auto rounded-md border border-border/60">
               <table className="w-full text-xs">
@@ -565,7 +698,8 @@ export function PromotionAudienceManager({
           </div>
         )}
 
-        {/* Acciones */}
+        {/* Acciones CSV */}
+        {!isCountryUi && (
         <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
@@ -606,12 +740,13 @@ export function PromotionAudienceManager({
             {showHistory ? "Ocultar historial" : "Historial de cargas"}
           </Button>
         </div>
+        )}
 
-        {showHistory && (
+        {!isCountryUi && showHistory && (
           <ImportHistoryView history={history} loading={loadingHistory} />
         )}
 
-        {mode === "list" && (
+        {(isListUi || isCountryUi) && (
           <div className="border-t border-border/60 pt-4">
             <AdminNotifyZoneButton
               promotion={promotion}

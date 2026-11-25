@@ -588,12 +588,19 @@ export const adminApi = {
 
   /** Audiencia por lista (CSV). Solo publicaciones KYNOO. */
   audience: {
-    setMode: (promotionId: string, audienceMode: PromotionAudienceMode) =>
+    setMode: (
+      promotionId: string,
+      audienceMode: PromotionAudienceMode,
+      countryId?: string | null,
+    ) =>
       apiClient<PromotionAudienceModeResponse>(
         `/admin/promotions/${promotionId}/audience-mode`,
         {
           method: "PATCH",
-          body: JSON.stringify({ audience_mode: audienceMode }),
+          body: JSON.stringify({
+            audience_mode: audienceMode,
+            ...(countryId ? { country_id: countryId } : {}),
+          }),
         },
       ),
 

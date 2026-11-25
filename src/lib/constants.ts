@@ -130,6 +130,7 @@ export const KYNOO_PUBLISHER_NAME = "KYNOO"
 export const PROMOTION_AUDIENCE_MODE_LABELS: Record<string, string> = {
   all: "Todos los usuarios (reglas normales)",
   list: "Solo usuarios de una lista (CSV)",
+  country: "Nacional",
 }
 
 export const PROMOTION_TYPE_LABELS: Record<string, string> = {

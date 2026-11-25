@@ -139,6 +139,8 @@ export type PromotionNotificationDispatchStatus = "queued" | "skipped"
 export type PromotionNotificationDispatchReason =
   | "already_notified"
   | "no_locations"
+  | "empty_audience"
+  | "no_country"
   | "admin_suspended"
   | "notify_disabled"
 
@@ -160,8 +162,12 @@ export interface PromotionNotifyUsersResponse {
 /** provider = publicación de proveedor; kynoo = creada por admin (sin créditos). */
 export type PromotionPublisherType = "provider" | "kynoo"
 
-/** all = reglas normales (zona + segmentación); list = solo usuarios del CSV. */
-export type PromotionAudienceMode = "all" | "list"
+/**
+ * all = reglas normales (zona + segmentación);
+ * list = solo usuarios del CSV;
+ * country = Nacional (mismo country_id; sin pines).
+ */
+export type PromotionAudienceMode = "all" | "list" | "country"
 
 export interface Promotion {
   id: string
@@ -324,6 +330,10 @@ export interface PromotionAudienceModeResponse {
   promotion_id: string
   audience_mode: PromotionAudienceMode
   audience_count: number
+  country_id?: string | null
+  locations_removed?: number
+  credits_charged?: number | null
+  balance_after?: number | null
 }
 
 export interface AudienceClearResponse {
@@ -370,7 +380,11 @@ export interface CreatePromotionRequest {
   end_date: string
   is_active?: boolean
   status?: PromotionStatus
-  /** Solo admin (publicación KYNOO). El backend lo ignora para proveedores. */
+  /**
+   * KYNOO: all | list | country.
+   * Provider: all | country (list se ignora / fuerza all).
+   * Con country: enviar country_id allowlisted.
+   */
   audience_mode?: PromotionAudienceMode
   /** Solo type subscription. Mayor a 0. Basta uno de los dos. */
   monthly_price?: number | null
@@ -469,6 +483,10 @@ export interface PromotionLocation {
 export interface AdCreditLocationPricing {
   point_credits: number | string
   city_credits: number | string
+  /** Costo al activar audiencia nacional (audience_mode=country). */
+  country_credits?: number | string
+  /** ISO alpha-2 allowlist (ej. ["EC"]). */
+  national_country_codes?: string[]
   currency_equivalent: string
   credits_per_usd: number | string
 }
@@ -771,6 +789,8 @@ export interface KnowledgeDocumentUpdate {
 export interface Country {
   id: string
   name: string
+  /** ISO 3166-1 alpha-2 (ej. EC). Presente tras migración audiencia nacional. */
+  code?: string | null
 }
 
 export interface City {

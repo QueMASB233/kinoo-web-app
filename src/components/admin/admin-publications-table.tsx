@@ -354,9 +354,18 @@ export function AdminPublicationsTable({
                             Lista · {promo.audience_count ?? 0}
                           </Badge>
                         )}
+                        {promo.audience_mode === "country" && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] font-normal bg-sky-50 text-sky-700 border-sky-200"
+                            title="Audiencia nacional por país del perfil"
+                          >
+                            Nacional
+                          </Badge>
+                        )}
                       </div>
                     ) : promo.provider_id ? (
-                      <div className="flex items-center gap-1 min-w-0">
+                      <div className="flex items-center gap-1 min-w-0 flex-wrap">
                         <span
                           className="font-mono truncate"
                           title={promo.provider_id}
@@ -364,6 +373,15 @@ export function AdminPublicationsTable({
                           {promo.provider_id}
                         </span>
                         <CopyProviderIdButton providerId={promo.provider_id} />
+                        {promo.audience_mode === "country" && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] font-normal bg-sky-50 text-sky-700 border-sky-200"
+                            title="Audiencia nacional por país del perfil"
+                          >
+                            Nacional
+                          </Badge>
+                        )}
                       </div>
                     ) : (
                       "—"

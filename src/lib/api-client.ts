@@ -346,6 +346,22 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
+    /** Provider dueño o admin: all | country. list solo vía adminApi.audience.setMode. */
+    setAudienceMode: (
+      promotionId: string,
+      audienceMode: import("@/types").PromotionAudienceMode,
+      countryId?: string | null,
+    ) =>
+      apiClient<import("@/types").PromotionAudienceModeResponse>(
+        `/promotions/${promotionId}/audience-mode`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            audience_mode: audienceMode,
+            ...(countryId ? { country_id: countryId } : {}),
+          }),
+        },
+      ),
   },
 
   lookup: {

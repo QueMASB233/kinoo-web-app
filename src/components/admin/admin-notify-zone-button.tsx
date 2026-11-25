@@ -37,12 +37,18 @@ interface AdminNotifyZoneButtonProps {
 
 function audienceBlockedReason(
   preview: PromotionNotificationAudience,
-  isListMode: boolean,
+  audienceMode: Promotion["audience_mode"],
+  promotion: Promotion,
 ): string | null {
-  if (isListMode) {
+  if (audienceMode === "list") {
     return (preview.audience_member_count ?? 0) > 0
       ? null
       : "La audiencia está vacía; sube un CSV antes de notificar."
+  }
+  if (audienceMode === "country") {
+    return promotion.country_id
+      ? null
+      : "La publicación nacional no tiene país configurado; no se puede notificar."
   }
   return preview.location_count > 0
     ? null
@@ -70,7 +76,9 @@ export function AdminNotifyZoneButton({
   onUpdated,
   variant = "icon",
 }: AdminNotifyZoneButtonProps) {
-  const isListMode = promotion.audience_mode === "list"
+  const audienceMode = promotion.audience_mode ?? "all"
+  const isListMode = audienceMode === "list"
+  const isCountryMode = audienceMode === "country"
   const { toast } = useToast()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [loadingAudience, setLoadingAudience] = useState(false)
@@ -106,7 +114,7 @@ export function AdminNotifyZoneButton({
         promotion.id,
       )
       setAudience(preview)
-      setAudienceError(audienceBlockedReason(preview, isListMode))
+      setAudienceError(audienceBlockedReason(preview, audienceMode, promotion))
     } catch (err) {
       setAudienceError(
         err instanceof ApiError
@@ -119,7 +127,11 @@ export function AdminNotifyZoneButton({
   }
 
   async function confirmNotify() {
-    if (!canNotify || !audience || audienceBlockedReason(audience, isListMode)) {
+    if (
+      !canNotify ||
+      !audience ||
+      audienceBlockedReason(audience, audienceMode, promotion)
+    ) {
       return
     }
     setSending(true)
@@ -132,11 +144,16 @@ export function AdminNotifyZoneButton({
         users_notified_at: new Date().toISOString(),
         users_notified_count: audience.eligible_count,
       })
+      const audienceLabel = isListMode
+        ? "de la lista"
+        : isCountryMode
+          ? "del país"
+          : "en la zona"
       toast({
         title: alreadyNotified ? "Reenvío encolado" : "Notificación encolada",
         description: `Se avisará a ~${audience.eligible_count} usuario${
           audience.eligible_count === 1 ? "" : "s"
-        } ${isListMode ? "de la lista" : "en la zona"}.`,
+        } ${audienceLabel}.`,
       })
       setDialogOpen(false)
     } catch (err) {
@@ -200,14 +217,16 @@ export function AdminNotifyZoneButton({
           <DialogHeader>
             <DialogTitle>
               {!canNotify
-                ? isListMode
+                ? isListMode || isCountryMode
                   ? "Aviso a la audiencia"
                   : "Aviso de zona"
                 : alreadyNotified
                   ? "Volver a notificar"
                   : isListMode
                     ? "Notificar audiencia"
-                    : "Notificar zona"}
+                    : isCountryMode
+                      ? "Notificar país"
+                      : "Notificar zona"}
             </DialogTitle>
             <DialogDescription>
               {!canNotify
@@ -216,7 +235,9 @@ export function AdminNotifyZoneButton({
                   ? ADMIN_RESEND_NOTIFY_WARNING
                   : isListMode
                     ? "Se enviará un push exclusivo a los usuarios de la lista, estén donde estén."
-                    : "Se enviará un push a los usuarios en el área de los puntos actuales."}
+                    : isCountryMode
+                      ? "Se enviará un push a los usuarios del país de esta publicación."
+                      : "Se enviará un push a los usuarios en el área de los puntos actuales."}
             </DialogDescription>
           </DialogHeader>
 
@@ -250,6 +271,12 @@ export function AdminNotifyZoneButton({
                     {audience.audience_member_count ?? 0} usuario
                     {audience.audience_member_count === 1 ? "" : "s"} de la
                     lista (push activo + segmentación).
+                  </p>
+                ) : isCountryMode ? (
+                  <p>
+                    Se avisará a ~{audience.eligible_count} usuario
+                    {audience.eligible_count === 1 ? "" : "s"} del país
+                    (perfil con país + segmentación + push activo).
                   </p>
                 ) : (
                   <p>
